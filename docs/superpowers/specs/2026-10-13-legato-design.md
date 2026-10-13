@@ -1,4 +1,4 @@
-# Murmur — design
+# Legato — design
 
 Working name. An Android-only local music player, built for one person (phuuun). No accounts, no network, no catalog.
 
@@ -44,7 +44,7 @@ app/
   playback/   PlaybackService (MediaSessionService, owns ExoPlayer), ReplayGain
   library/    MediaStoreScanner, Room (playlists, playlist_tracks, play_stats), LibraryRepository
   ui/         theme/, screens (Library, Album, Artist, Playlist, NowPlaying, Search), components/
-  MainActivity, MurmurApp
+  MainActivity, LegatoApp
 ```
 
 - `PlaybackService` is the only thing that touches the player. UI talks to it through a `MediaController`; all queue operations are `MediaController` calls (`addMediaItem`, `moveMediaItem`, ...), so the queue lives in the player, not in a second copy.
@@ -70,5 +70,5 @@ Scan → `LibraryRepository` exposes `Flow<List<Track>>` (and album/artist group
 
 ## Open items
 
-- Final app name and `applicationId` (placeholder: `com.phuuun.murmur`).
+- Final app name and `applicationId` (placeholder: `com.phuuun.legato`).
 - Whether v2 starts with EQ or smart shuffle.
