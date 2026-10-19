@@ -18,13 +18,18 @@ data class Track(
     val relativePath: String = "",
     val composer: String = "",
     val modified: Long = 0,
+    val artists: List<String> = emptyList(),
 )
 
 data class Album(val id: Long, val title: String, val artist: String, val artUri: Uri?, val tracks: List<Track>)
 
 data class Artist(val name: String, val albums: List<Album>)
 
-/** Blank tags get a label instead of an empty row; a blank title falls back to the file name. */
+/**
+ * Blank tags get a label instead of an empty row; a blank title falls back to the file name.
+ * Several artists are stored as "A; B" (what Edit writes) and shown as "A, B".
+ * The cover is the file's own embedded picture, versioned by its modified time so an edit shows up at once.
+ */
 fun trackFromRow(
     id: Long,
     title: String?,
@@ -38,18 +43,23 @@ fun trackFromRow(
     relativePath: String = "",
     composer: String? = null,
     modified: Long = 0,
-): Track = Track(
-    id = id,
-    title = title?.takeIf { it.isNotBlank() } ?: displayName.substringBeforeLast('.'),
-    artist = artist?.takeIf { it.isNotBlank() && it != MediaStore.UNKNOWN_STRING } ?: "Unknown artist",
-    album = album?.takeIf { it.isNotBlank() } ?: "Unknown album",
-    albumId = albumId,
-    durationMs = durationMs,
-    uri = ContentUris.withAppendedId(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, id),
-    artUri = ContentUris.withAppendedId(Uri.parse("content://media/external/audio/albumart"), albumId),
-    trackNumber = trackNumber,
-    path = path,
-    relativePath = relativePath,
-    composer = composer?.takeIf { it != MediaStore.UNKNOWN_STRING }.orEmpty(),
-    modified = modified,
-)
+): Track {
+    val uri = ContentUris.withAppendedId(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, id)
+    val artists = artist.orEmpty().split(';').map { it.trim() }.filter { it.isNotEmpty() && it != MediaStore.UNKNOWN_STRING }
+    return Track(
+        id = id,
+        title = title?.takeIf { it.isNotBlank() } ?: displayName.substringBeforeLast('.'),
+        artist = artists.joinToString(", ").ifEmpty { "Unknown artist" },
+        album = album?.takeIf { it.isNotBlank() } ?: "Unknown album",
+        albumId = albumId,
+        durationMs = durationMs,
+        uri = uri,
+        artUri = uri.buildUpon().appendQueryParameter("v", modified.toString()).build(),
+        trackNumber = trackNumber,
+        path = path,
+        relativePath = relativePath,
+        composer = composer?.takeIf { it != MediaStore.UNKNOWN_STRING }.orEmpty(),
+        modified = modified,
+        artists = artists,
+    )
+}

@@ -7,5 +7,9 @@ fun groupAlbums(tracks: List<Track>): List<Album> =
         Album(id, ordered.first().album, ordered.first().artist, ordered.first().artUri, ordered)
     }.sortedBy { it.title.lowercase() }
 
+/** An album sits under every artist on it, so a duet shows up under both singers. */
 fun groupArtists(albums: List<Album>): List<Artist> =
-    albums.groupBy { it.artist }.map { (name, group) -> Artist(name, group) }.sortedBy { it.name.lowercase() }
+    albums.flatMap { a -> a.tracks.flatMap { it.artists }.ifEmpty { listOf("Unknown artist") }.distinct().map { it to a } }
+        .groupBy({ it.first }, { it.second })
+        .map { (name, group) -> Artist(name, group) }
+        .sortedBy { it.name.lowercase() }

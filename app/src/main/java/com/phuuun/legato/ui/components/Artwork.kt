@@ -9,10 +9,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.ContentScale
 import coil3.compose.AsyncImage
 
-/** Cover art. The `surfaceVariant` box behind it is the placeholder when a track has no art. */
+/** A track's cover (see [AudioCover]). The `surfaceVariant` box behind it is the placeholder when a track has no art. */
 @Composable
 fun Artwork(uri: Uri?, modifier: Modifier = Modifier) {
     Box(modifier.background(MaterialTheme.colorScheme.surfaceVariant)) {
-        if (uri != null) AsyncImage(model = uri, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.matchParentSize())
+        if (uri != null) AsyncImage(model = AudioCover(uri), contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.matchParentSize())
     }
 }
