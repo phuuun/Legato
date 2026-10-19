@@ -45,6 +45,8 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.navigation
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import com.phuuun.legato.library.FolderKind
+import com.phuuun.legato.library.FolderStore
 import com.phuuun.legato.library.LibraryRepository
 import com.phuuun.legato.library.PlaylistRepository
 import com.phuuun.legato.library.Track
@@ -62,6 +64,7 @@ import com.phuuun.legato.ui.nowplaying.NowPlayingViewModel
 import com.phuuun.legato.ui.playlists.AddToPlaylistSheet
 import com.phuuun.legato.ui.playlists.PlaylistScreen
 import com.phuuun.legato.ui.playlists.PlaylistsList
+import com.phuuun.legato.ui.settings.FoldersPane
 import com.phuuun.legato.ui.settings.SettingsScreen
 import com.phuuun.legato.ui.settings.SettingsSection
 import kotlinx.coroutines.launch
@@ -73,7 +76,7 @@ private enum class Section(val route: String, val label: String, val icon: Image
 }
 
 @Composable
-fun LegatoNav(library: LibraryRepository, player: PlayerConnection, playlistRepo: PlaylistRepository) {
+fun LegatoNav(library: LibraryRepository, player: PlayerConnection, playlistRepo: PlaylistRepository, folders: FolderStore) {
     val nav = rememberNavController()
     // One view model for every destination, so the loaded library and the search box survive navigation.
     val vm: LibraryViewModel = viewModel(factory = viewModelFactory { initializer { LibraryViewModel(library) } })
@@ -134,8 +137,15 @@ fun LegatoNav(library: LibraryRepository, player: PlayerConnection, playlistRepo
             composable("settings") {
                 SettingsScreen(onBack = { nav.popBackStack() }) { section ->
                     when (section) {
+                        SettingsSection.Music -> {
+                            val f by remember { folders.folders(FolderKind.Music) }.collectAsState(emptySet())
+                            FoldersPane(f, "Only files directly in these folders show up. With no folders, all music shows.", { folders.add(FolderKind.Music, it) }, { folders.remove(FolderKind.Music, it) })
+                        }
+                        SettingsSection.Audiobooks -> {
+                            val f by remember { folders.folders(FolderKind.Audiobooks) }.collectAsState(emptySet())
+                            FoldersPane(f, null, { folders.add(FolderKind.Audiobooks, it) }, { folders.remove(FolderKind.Audiobooks, it) })
+                        }
                         SettingsSection.Converter -> Text("Comes with the converter.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(20.dp))
-                        else -> Unit
                     }
                 }
             }

@@ -14,6 +14,10 @@ data class Track(
     val uri: Uri,
     val artUri: Uri?,
     val trackNumber: Int = 0,
+    val path: String = "",
+    val relativePath: String = "",
+    val composer: String = "",
+    val modified: Long = 0,
 )
 
 data class Album(val id: Long, val title: String, val artist: String, val artUri: Uri?, val tracks: List<Track>)
@@ -30,6 +34,10 @@ fun trackFromRow(
     durationMs: Long,
     displayName: String,
     trackNumber: Int = 0,
+    path: String = "",
+    relativePath: String = "",
+    composer: String? = null,
+    modified: Long = 0,
 ): Track = Track(
     id = id,
     title = title?.takeIf { it.isNotBlank() } ?: displayName.substringBeforeLast('.'),
@@ -40,4 +48,8 @@ fun trackFromRow(
     uri = ContentUris.withAppendedId(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, id),
     artUri = ContentUris.withAppendedId(Uri.parse("content://media/external/audio/albumart"), albumId),
     trackNumber = trackNumber,
+    path = path,
+    relativePath = relativePath,
+    composer = composer?.takeIf { it != MediaStore.UNKNOWN_STRING }.orEmpty(),
+    modified = modified,
 )
