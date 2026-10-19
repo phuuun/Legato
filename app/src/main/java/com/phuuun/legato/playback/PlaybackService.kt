@@ -6,6 +6,7 @@ import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
+import androidx.media3.common.Tracks
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
@@ -33,6 +34,14 @@ class PlaybackService : MediaSessionService() {
             override fun onMediaItemTransition(item: MediaItem?, reason: Int) {
                 if (reason == Player.MEDIA_ITEM_TRANSITION_REASON_AUTO || reason == Player.MEDIA_ITEM_TRANSITION_REASON_REPEAT) recordPlay(playing)
                 playing = item
+            }
+
+            // Every item reports its tracks, so an untagged one lands back on full volume.
+            override fun onTracksChanged(tracks: Tracks) {
+                val tags = buildMap {
+                    for (g in tracks.groups) if (g.isSelected) for (i in 0 until g.length) g.getTrackFormat(i).metadata?.let { putAll(replayGainTags(it)) }
+                }
+                player.volume = gainToVolume(parseGainDb(tags), parsePeak(tags))
             }
 
             // The last track in the queue ends without a transition.
