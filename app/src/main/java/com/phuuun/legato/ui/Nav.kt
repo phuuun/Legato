@@ -3,6 +3,8 @@ package com.phuuun.legato.ui
 import android.net.Uri
 import android.widget.Toast
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
@@ -48,7 +50,10 @@ import androidx.navigation.navArgument
 import com.phuuun.legato.library.FolderKind
 import com.phuuun.legato.library.FolderStore
 import com.phuuun.legato.library.asAlbum
+import com.phuuun.legato.library.edit.CoverChange
 import com.phuuun.legato.library.edit.TagWriter
+import com.phuuun.legato.library.edit.fixRows
+import com.phuuun.legato.library.edit.properties
 import com.phuuun.legato.library.groupBooks
 import com.phuuun.legato.library.LibraryRepository
 import com.phuuun.legato.library.PlaylistRepository
@@ -56,6 +61,7 @@ import com.phuuun.legato.library.Track
 import com.phuuun.legato.playback.PlayerConnection
 import com.phuuun.legato.ui.audiobooks.AudiobooksScreen
 import com.phuuun.legato.ui.components.LegatoHeader
+import com.phuuun.legato.ui.edit.BulkFixScreen
 import com.phuuun.legato.ui.edit.EditScreen
 import com.phuuun.legato.ui.components.MiniPlayer
 import com.phuuun.legato.ui.library.AlbumScreen
@@ -167,12 +173,21 @@ fun LegatoNav(library: LibraryRepository, audiobooks: LibraryRepository, player:
                     },
                 )
             }
+            composable("fix") {
+                val rows = remember { fixRows(state.tracks) }
+                BulkFixScreen(rows, onBack = { nav.popBackStack() }, write = { t, e -> tagWriter.write(t, e.properties(), CoverChange.Keep) })
+            }
             composable("settings") {
                 SettingsScreen(onBack = { nav.popBackStack() }) { section ->
                     when (section) {
                         SettingsSection.Music -> {
                             val f by remember { folders.folders(FolderKind.Music) }.collectAsState(emptySet())
-                            FoldersPane(f, "Only files directly in these folders show up. With no folders, all music shows.", { folders.add(FolderKind.Music, it) }, { folders.remove(FolderKind.Music, it) })
+                            FoldersPane(f, "Only files directly in these folders show up. With no folders, all music shows.", { folders.add(FolderKind.Music, it) }, { folders.remove(FolderKind.Music, it) }) {
+                                Text(
+                                    "Fix unknown artists (${state.tracks.count { it.artists.isEmpty() }})", style = MaterialTheme.typography.bodyLarge,
+                                    modifier = Modifier.fillMaxWidth().clickable { nav.navigate("fix") }.padding(horizontal = 16.dp, vertical = 12.dp),
+                                )
+                            }
                         }
                         SettingsSection.Audiobooks -> {
                             val f by remember { folders.folders(FolderKind.Audiobooks) }.collectAsState(emptySet())

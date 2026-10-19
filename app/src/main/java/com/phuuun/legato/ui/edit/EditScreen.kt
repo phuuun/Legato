@@ -134,7 +134,7 @@ fun EditScreen(track: Track?, kind: FolderKind, chapters: Int, onBack: () -> Uni
 }
 
 @Composable
-private fun Field(label: String, value: String, onRemove: (() -> Unit)? = null, onChange: (String) -> Unit) =
+internal fun Field(label: String, value: String, onRemove: (() -> Unit)? = null, onChange: (String) -> Unit) =
     TextField(
         value = value, onValueChange = onChange, singleLine = true, label = { Text(label) },
         trailingIcon = onRemove?.let { remove -> { IconButton(onClick = remove) { Icon(Icons.Rounded.Close, "Remove $label") } } },

@@ -1,9 +1,14 @@
 package com.phuuun.legato.library.edit
 
+import com.phuuun.legato.library.trackFromRow
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
 
-/** Fixtures are real titles from the phone's library. */
+/** Fixtures are real titles from the phone's library. Robolectric for trackFromRow's Uri. */
+@RunWith(RobolectricTestRunner::class)
 class GuessTest {
     @Test
     fun artist_dash_title_with_trailing_junk() = assertEquals(Guess("Agnes Monica", "Rindu"), guessFromTitle("Agnes Monica - Rindu  Official 4K Remastered"))
@@ -32,4 +37,17 @@ class GuessTest {
 
     @Test
     fun a_title_never_strips_to_nothing() = assertEquals(Guess("Madonna", "Music"), guessFromTitle("Madonna - Music (Official Video)"))
+
+    @Test
+    fun rows_cover_only_unknown_artist_songs() {
+        val rows = fixRows(listOf(
+            trackFromRow(1, "Chrisye - Aku Cinta Dia (Official Music Video)", null, null, 1, 1000, "a.mp3"),
+            trackFromRow(2, "Halo", "Beyoncé", null, 1, 1000, "b.mp3"),
+        ))
+        assertEquals(listOf(FixRow(rows[0].track, "Chrisye", "Aku Cinta Dia", include = true)), rows)
+    }
+
+    @Test
+    fun row_without_separator_starts_unticked() =
+        assertFalse(fixRows(listOf(trackFromRow(1, "Alarm Clock Loud", null, null, 1, 1000, "a.mp3"))).single().include)
 }

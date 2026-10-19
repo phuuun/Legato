@@ -1,5 +1,7 @@
 package com.phuuun.legato.library.edit
 
+import com.phuuun.legato.library.Track
+
 data class Guess(val artist: String, val title: String)
 
 private val junk = setOf("official", "video", "music", "audio", "lyric", "lyrics", "lirik", "remaster", "remastered", "4k", "hd", "mv", "visualizer")
@@ -26,3 +28,9 @@ fun guessFromTitle(raw: String): Guess {
         ?: return Guess("", clean(raw))
     return Guess(clean(raw.substring(0, at)), clean(raw.substring(at + sep.length)))
 }
+
+/** One song in the bulk fix: its guessed artist and title, ticked only when the guess found an artist. */
+data class FixRow(val track: Track, val artist: String, val title: String, val include: Boolean)
+
+fun fixRows(tracks: List<Track>): List<FixRow> =
+    tracks.filter { it.artists.isEmpty() }.map { t -> guessFromTitle(t.title).let { g -> FixRow(t, g.artist, g.title, include = g.artist.isNotBlank()) } }
