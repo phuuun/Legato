@@ -32,17 +32,20 @@ import com.phuuun.legato.library.Artist
 import com.phuuun.legato.library.Track
 import com.phuuun.legato.ui.components.Artwork
 
-/** Long-press menu on songs and albums. `next` = true plays right after the current track, false appends to the queue. */
+/** What a long-press can do with a song or a whole album. `next` = true plays right after the current track, false appends. */
+class TrackActions(val queue: (List<Track>, next: Boolean) -> Unit, val addToPlaylist: (List<Track>) -> Unit)
+
 @Composable
-private fun QueueMenu(open: Boolean, onDismiss: () -> Unit, onQueue: (next: Boolean) -> Unit) =
+private fun TrackMenu(open: Boolean, onDismiss: () -> Unit, tracks: List<Track>, actions: TrackActions) =
     DropdownMenu(open, onDismiss) {
-        DropdownMenuItem(text = { Text("Play next") }, onClick = { onQueue(true); onDismiss() })
-        DropdownMenuItem(text = { Text("Add to queue") }, onClick = { onQueue(false); onDismiss() })
+        DropdownMenuItem(text = { Text("Play next") }, onClick = { actions.queue(tracks, true); onDismiss() })
+        DropdownMenuItem(text = { Text("Add to queue") }, onClick = { actions.queue(tracks, false); onDismiss() })
+        DropdownMenuItem(text = { Text("Add to playlist…") }, onClick = { actions.addToPlaylist(tracks); onDismiss() })
     }
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-fun SongRow(track: Track, onClick: () -> Unit, onQueue: (next: Boolean) -> Unit, modifier: Modifier = Modifier) {
+fun SongRow(track: Track, onClick: () -> Unit, actions: TrackActions, modifier: Modifier = Modifier) {
     var menu by remember { mutableStateOf(false) }
     val haptics = LocalHapticFeedback.current
     Row(
@@ -56,20 +59,20 @@ fun SongRow(track: Track, onClick: () -> Unit, onQueue: (next: Boolean) -> Unit,
             Text(track.title, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Text(track.artist, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
-        QueueMenu(menu, { menu = false }, onQueue)
+        TrackMenu(menu, { menu = false }, listOf(track), actions)
     }
 }
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-fun AlbumCard(album: Album, onClick: () -> Unit, onQueue: (next: Boolean) -> Unit, modifier: Modifier = Modifier) {
+fun AlbumCard(album: Album, onClick: () -> Unit, actions: TrackActions, modifier: Modifier = Modifier) {
     var menu by remember { mutableStateOf(false) }
     val haptics = LocalHapticFeedback.current
     Column(modifier.combinedClickable(onClick = onClick, onLongClick = { haptics.performHapticFeedback(HapticFeedbackType.LongPress); menu = true }).padding(bottom = 8.dp)) {
         Artwork(album.artUri, Modifier.fillMaxWidth().aspectRatio(1f).clip(RoundedCornerShape(8.dp)))
         Text(album.title, style = MaterialTheme.typography.labelLarge, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 8.dp))
         Text(album.artist, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
-        QueueMenu(menu, { menu = false }, onQueue)
+        TrackMenu(menu, { menu = false }, album.tracks, actions)
     }
 }
 

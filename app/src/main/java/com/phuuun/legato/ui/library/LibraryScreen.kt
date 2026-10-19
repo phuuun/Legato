@@ -31,7 +31,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.phuuun.legato.library.Track
 
-private enum class Tab(val label: String) { Songs("SONGS"), Albums("ALBUMS"), Artists("ARTISTS") }
+private enum class Tab(val label: String) { Songs("SONGS"), Albums("ALBUMS"), Artists("ARTISTS"), Playlists("PLAYLISTS") }
 
 @Composable
 fun LibraryScreen(
@@ -40,7 +40,8 @@ fun LibraryScreen(
     onPlay: (List<Track>, Int) -> Unit,
     onAlbum: (Long) -> Unit,
     onArtist: (String) -> Unit,
-    onQueue: (List<Track>, next: Boolean) -> Unit,
+    actions: TrackActions,
+    playlistsTab: @Composable () -> Unit,
 ) {
     var tab by rememberSaveable { mutableStateOf(Tab.Songs) }
     Column(Modifier.fillMaxSize().systemBarsPadding()) {
@@ -71,27 +72,28 @@ fun LibraryScreen(
         when {
             !state.loaded -> Unit
             state.tracks.isEmpty() -> Empty("No music found", "Add some files to this phone and they'll show up here.")
-            state.query.isNotBlank() -> SearchBody(state.results, onPlay, onAlbum, onArtist, onQueue)
+            state.query.isNotBlank() -> SearchBody(state.results, onPlay, onAlbum, onArtist, actions)
             tab == Tab.Songs -> LazyColumn(Modifier.fillMaxSize()) {
-                items(state.tracks, key = { it.id }) { t -> SongRow(t, onClick = { onPlay(state.tracks, state.tracks.indexOf(t)) }, onQueue = { onQueue(listOf(t), it) }) }
+                items(state.tracks, key = { it.id }) { t -> SongRow(t, onClick = { onPlay(state.tracks, state.tracks.indexOf(t)) }, actions = actions) }
             }
             tab == Tab.Albums -> LazyVerticalGrid(
                 GridCells.Fixed(2), Modifier.fillMaxSize(), contentPadding = PaddingValues(20.dp),
                 horizontalArrangement = Arrangement.spacedBy(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp),
-            ) { items(state.albums, key = { it.id }) { a -> AlbumCard(a, onClick = { onAlbum(a.id) }, onQueue = { onQueue(a.tracks, it) }) } }
+            ) { items(state.albums, key = { it.id }) { a -> AlbumCard(a, onClick = { onAlbum(a.id) }, actions = actions) } }
+            tab == Tab.Playlists -> playlistsTab()
             else -> LazyColumn(Modifier.fillMaxSize()) { items(state.artists, key = { it.name }) { a -> ArtistRow(a, onClick = { onArtist(a.name) }) } }
         }
     }
 }
 
 @Composable
-private fun SearchBody(r: SearchResults, onPlay: (List<Track>, Int) -> Unit, onAlbum: (Long) -> Unit, onArtist: (String) -> Unit, onQueue: (List<Track>, Boolean) -> Unit) {
+private fun SearchBody(r: SearchResults, onPlay: (List<Track>, Int) -> Unit, onAlbum: (Long) -> Unit, onArtist: (String) -> Unit, actions: TrackActions) {
     if (r.tracks.isEmpty() && r.albums.isEmpty() && r.artists.isEmpty()) { Empty("Nothing found", "Try another spelling."); return }
     LazyColumn(Modifier.fillMaxSize()) {
         if (r.artists.isNotEmpty()) { item { Eyebrow("ARTISTS") }; items(r.artists, key = { "ar" + it.name }) { a -> ArtistRow(a, onClick = { onArtist(a.name) }) } }
         if (r.albums.isNotEmpty()) { item { Eyebrow("ALBUMS") }; items(r.albums, key = { "al" + it.id }) { a ->
             SongRowLike(a.title, a.artist) { onAlbum(a.id) } } }
-        if (r.tracks.isNotEmpty()) { item { Eyebrow("SONGS") }; items(r.tracks, key = { "t" + it.id }) { t -> SongRow(t, onClick = { onPlay(r.tracks, r.tracks.indexOf(t)) }, onQueue = { onQueue(listOf(t), it) }) } }
+        if (r.tracks.isNotEmpty()) { item { Eyebrow("SONGS") }; items(r.tracks, key = { "t" + it.id }) { t -> SongRow(t, onClick = { onPlay(r.tracks, r.tracks.indexOf(t)) }, actions = actions) } }
     }
 }
 

@@ -21,7 +21,7 @@ class MainActivity : ComponentActivity() {
             LegatoTheme {
                 Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
                     PermissionGate {
-                        LegatoNav(app.library, app.player)
+                        LegatoNav(app.library, app.player, app.playlists)
                     }
                 }
             }

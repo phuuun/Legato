@@ -24,6 +24,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
@@ -44,6 +46,7 @@ import androidx.navigation.compose.navigation
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.phuuun.legato.library.LibraryRepository
+import com.phuuun.legato.library.PlaylistRepository
 import com.phuuun.legato.library.Track
 import com.phuuun.legato.playback.PlayerConnection
 import com.phuuun.legato.ui.components.MiniPlayer
@@ -52,8 +55,13 @@ import com.phuuun.legato.ui.library.ArtistScreen
 import com.phuuun.legato.ui.library.Empty
 import com.phuuun.legato.ui.library.LibraryScreen
 import com.phuuun.legato.ui.library.LibraryViewModel
+import com.phuuun.legato.ui.library.TrackActions
 import com.phuuun.legato.ui.nowplaying.NowPlayingSheet
 import com.phuuun.legato.ui.nowplaying.NowPlayingViewModel
+import com.phuuun.legato.ui.playlists.AddToPlaylistSheet
+import com.phuuun.legato.ui.playlists.PlaylistScreen
+import com.phuuun.legato.ui.playlists.PlaylistsList
+import kotlinx.coroutines.launch
 
 private enum class Section(val route: String, val label: String, val icon: ImageVector) {
     Music("music", "MUSIC", Icons.Outlined.MusicNote),
@@ -62,7 +70,7 @@ private enum class Section(val route: String, val label: String, val icon: Image
 }
 
 @Composable
-fun LegatoNav(library: LibraryRepository, player: PlayerConnection) {
+fun LegatoNav(library: LibraryRepository, player: PlayerConnection, playlistRepo: PlaylistRepository) {
     val nav = rememberNavController()
     // One view model for every destination, so the loaded library and the search box survive navigation.
     val vm: LibraryViewModel = viewModel(factory = viewModelFactory { initializer { LibraryViewModel(library) } })
@@ -74,9 +82,16 @@ fun LegatoNav(library: LibraryRepository, player: PlayerConnection) {
     // Like YT Music: picking a song opens the full player; swiping it down leaves the mini player.
     val onPlay: (List<Track>, Int) -> Unit = { tracks, i -> player.play(tracks, i); expanded = true }
     val context = LocalContext.current
-    val onQueue: (List<Track>, Boolean) -> Unit = { tracks, next ->
-        player.queue(tracks, next)
-        Toast.makeText(context, if (next) "Playing next" else "Added to queue", Toast.LENGTH_SHORT).show()
+    // Playlist writes run in this activity-long scope, so leaving a screen mid-write doesn't cancel it.
+    val scope = rememberCoroutineScope()
+    val playlists by playlistRepo.playlists.collectAsState(emptyList())
+    var adding by remember { mutableStateOf<List<Track>?>(null) }
+    val toast = { text: String -> Toast.makeText(context, text, Toast.LENGTH_SHORT).show() }
+    val actions = remember {
+        TrackActions(
+            queue = { tracks, next -> player.queue(tracks, next); toast(if (next) "Playing next" else "Added to queue") },
+            addToPlaylist = { adding = it },
+        )
     }
 
     Column(Modifier.fillMaxSize()) {
@@ -85,15 +100,28 @@ fun LegatoNav(library: LibraryRepository, player: PlayerConnection) {
             // Album and artist pages live inside the Music section, so its tab stays lit and keeps its back stack.
             navigation(startDestination = "library", route = Section.Music.route) {
                 composable("library") {
-                    LibraryScreen(state, vm::setQuery, onPlay, onAlbum = { nav.navigate("album/$it") }, onArtist = { nav.navigate("artist/${Uri.encode(it)}") }, onQueue = onQueue)
+                    LibraryScreen(state, vm::setQuery, onPlay, onAlbum = { nav.navigate("album/$it") }, onArtist = { nav.navigate("artist/${Uri.encode(it)}") }, actions = actions) {
+                        PlaylistsList(playlists, onOpen = { nav.navigate("playlist/$it") }, onCreate = { scope.launch { playlistRepo.create(it) } })
+                    }
                 }
                 composable("album/{id}", listOf(navArgument("id") { type = NavType.LongType })) { e ->
                     val id = e.arguments?.getLong("id")
-                    AlbumScreen(state.albums.firstOrNull { it.id == id }, onBack = { nav.popBackStack() }, onPlay = onPlay, onQueue = onQueue)
+                    AlbumScreen(state.albums.firstOrNull { it.id == id }, onBack = { nav.popBackStack() }, onPlay = onPlay, actions = actions)
                 }
                 composable("artist/{name}", listOf(navArgument("name") { type = NavType.StringType })) { e ->
                     val name = e.arguments?.getString("name")
-                    ArtistScreen(state.artists.firstOrNull { it.name == name }, onBack = { nav.popBackStack() }, onAlbum = { nav.navigate("album/$it") }, onQueue = onQueue)
+                    ArtistScreen(state.artists.firstOrNull { it.name == name }, onBack = { nav.popBackStack() }, onAlbum = { nav.navigate("album/$it") }, actions = actions)
+                }
+                composable("playlist/{id}", listOf(navArgument("id") { type = NavType.LongType })) { e ->
+                    val id = e.arguments?.getLong("id") ?: 0
+                    val tracks by remember(id) { playlistRepo.tracksOf(id) }.collectAsState(emptyList())
+                    PlaylistScreen(
+                        playlists.firstOrNull { it.id == id }, tracks, onBack = { nav.popBackStack() }, onPlay = onPlay, actions = actions,
+                        onRename = { scope.launch { playlistRepo.rename(id, it) } },
+                        onDelete = { scope.launch { playlistRepo.delete(id) }; nav.popBackStack() },
+                        onRemove = { scope.launch { playlistRepo.removeAt(id, it) } },
+                        onMove = { from, to -> scope.launch { playlistRepo.move(id, from, to) } },
+                    )
                 }
             }
             composable(Section.Audiobooks.route) { ComingSoon("Audiobooks", "Your audiobooks will live here, with your place saved in each one.") }
@@ -124,6 +152,15 @@ fun LegatoNav(library: LibraryRepository, player: PlayerConnection) {
         }
     }
     now?.let { if (expanded) NowPlayingSheet(it, nowPlayingVm, onDismiss = { expanded = false }) }
+    adding?.let { tracks ->
+        val ids = tracks.map { it.id }
+        AddToPlaylistSheet(
+            playlists,
+            onPick = { p -> scope.launch { playlistRepo.addTracks(p.id, ids) }; toast("Added to ${p.name}") },
+            onCreate = { name -> scope.launch { playlistRepo.addTracks(playlistRepo.create(name), ids) }; toast("Added to $name") },
+            onDismiss = { adding = null },
+        )
+    }
 }
 
 @Composable

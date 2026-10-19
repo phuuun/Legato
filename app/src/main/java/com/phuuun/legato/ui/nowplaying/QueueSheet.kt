@@ -11,7 +11,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Close
@@ -26,26 +25,21 @@ import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.zIndex
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import com.phuuun.legato.playback.moveItem
 import com.phuuun.legato.playback.removeItem
 import com.phuuun.legato.ui.components.Artwork
-import kotlin.math.roundToInt
+import com.phuuun.legato.ui.components.rememberReorder
 
 private val RowHeight = 60.dp
 
@@ -74,9 +68,7 @@ fun QueueSheet(player: Player, onDismiss: () -> Unit) {
         onDispose { player.removeListener(l) }
     }
     val list = rememberLazyListState(initialFirstVisibleItemIndex = q.order.indexOf(q.current).coerceAtLeast(0))
-    val rowPx = with(LocalDensity.current) { RowHeight.toPx() }
-    var dragging by remember { mutableStateOf<Int?>(null) }
-    var offset by remember { mutableFloatStateOf(0f) }
+    val reorder = rememberReorder(RowHeight) { from, to -> player.moveItem(from, to) }
 
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true), containerColor = MaterialTheme.colorScheme.surface) {
         Text("QUEUE", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(start = 20.dp, bottom = 8.dp))
@@ -86,9 +78,8 @@ fun QueueSheet(player: Player, onDismiss: () -> Unit) {
                 val isCurrent = index == q.current
                 Row(
                     Modifier.fillMaxWidth().height(RowHeight)
-                        .zIndex(if (dragging == pos) 1f else 0f)
-                        .graphicsLayer { translationY = if (dragging == pos) offset else 0f }
-                        .background(if (isCurrent || dragging == pos) MaterialTheme.colorScheme.surfaceVariant else MaterialTheme.colorScheme.surface)
+                        .then(reorder.row(pos))
+                        .background(if (isCurrent || reorder.dragging == pos) MaterialTheme.colorScheme.surfaceVariant else MaterialTheme.colorScheme.surface)
                         .padding(start = 20.dp, end = 4.dp),
                     verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
@@ -100,18 +91,7 @@ fun QueueSheet(player: Player, onDismiss: () -> Unit) {
                     IconButton(onClick = { player.removeItem(index) }) { Icon(Icons.Rounded.Close, "Remove", tint = MaterialTheme.colorScheme.onSurfaceVariant) }
                     // Under shuffle the list is play order, not queue order, so a drag has no honest meaning: no handle.
                     if (!q.shuffled) {
-                        // ponytail: the row follows the finger and lands on release; rows don't part live and the list doesn't auto-scroll. Reach for a reorder library if that feels stiff.
-                        Icon(
-                            Icons.Rounded.DragHandle, "Reorder", tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.size(48.dp).padding(12.dp).pointerInput(pos) {
-                                detectVerticalDragGestures(
-                                    onDragStart = { dragging = pos; offset = 0f },
-                                    onDragEnd = { player.moveItem(pos, pos + (offset / rowPx).roundToInt()); dragging = null; offset = 0f },
-                                    onDragCancel = { dragging = null; offset = 0f },
-                                    onVerticalDrag = { change, dy -> change.consume(); offset += dy },
-                                )
-                            },
-                        )
+                        Icon(Icons.Rounded.DragHandle, "Reorder", tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(48.dp).then(reorder.handle(pos)).padding(12.dp))
                     }
                 }
             }
