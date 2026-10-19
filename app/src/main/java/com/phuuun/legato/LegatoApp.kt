@@ -4,6 +4,7 @@ import android.app.Application
 import coil3.ImageLoader
 import coil3.PlatformContext
 import coil3.SingletonImageLoader
+import com.phuuun.legato.converter.DownloadQueue
 import com.phuuun.legato.library.FolderKind
 import com.phuuun.legato.library.FolderStore
 import com.phuuun.legato.library.LibraryRepository
@@ -25,6 +26,7 @@ class LegatoApp : Application(), SingletonImageLoader.Factory {
     val player by lazy { PlayerConnection(this) }
     val tagWriter by lazy { TagWriter(this) }
     val progress by lazy { ProgressStore(this) }
+    val downloads = DownloadQueue()
 
     // Playlists resolve against all music, not the chosen folders: removing a folder must never prune a playlist.
     private val allMusic: LibraryRepository by lazy { MediaStoreLibrary(this, flowOf(emptySet()), WhenEmpty.AllMusic) }
