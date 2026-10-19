@@ -25,4 +25,11 @@ class TagsTest {
         assertEquals(400 to 1000, coverSize(1200, 3000))
         assertEquals(900 to 600, coverSize(900, 600)) // small images are never upscaled
     }
+
+    @Test
+    fun square_crop_takes_the_centre() {
+        assertEquals(Crop(280, 0, 720), squareCrop(1280, 720))
+        assertEquals(Crop(0, 60, 480), squareCrop(480, 600))
+        assertEquals(Crop(0, 0, 500), squareCrop(500, 500))
+    }
 }

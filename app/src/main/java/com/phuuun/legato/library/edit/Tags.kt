@@ -34,3 +34,11 @@ fun coverSize(width: Int, height: Int, max: Int = 1000): Pair<Int, Int> {
     val scale = minOf(1f, max.toFloat() / maxOf(width, height))
     return (width * scale).roundToInt().coerceAtLeast(1) to (height * scale).roundToInt().coerceAtLeast(1)
 }
+
+data class Crop(val left: Int, val top: Int, val size: Int)
+
+/** The centre square of a picture: YouTube thumbnails are 16:9, covers are square. */
+fun squareCrop(width: Int, height: Int): Crop {
+    val s = minOf(width, height)
+    return Crop((width - s) / 2, (height - s) / 2, s)
+}

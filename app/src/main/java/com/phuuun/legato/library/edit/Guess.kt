@@ -12,7 +12,7 @@ private val word = Regex("""[\p{L}\p{N}']+""")
 private fun isJunk(w: String) = w.lowercase() in junk
 
 /** Drops bracketed parts that hold a junk word, then junk words off the end, never the last word left. */
-private fun clean(part: String): String {
+internal fun clean(part: String): String {
     val words = bracketed.replace(part) { m -> if (word.findAll(m.value).any { isJunk(it.value) }) " " else m.value }
         .split(Regex("\\s+")).filter { it.isNotEmpty() }.toMutableList()
     while (words.size > 1 && isJunk(words.last().trim { !it.isLetterOrDigit() })) words.removeAt(words.lastIndex)
