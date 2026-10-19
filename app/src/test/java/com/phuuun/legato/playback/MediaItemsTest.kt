@@ -2,6 +2,7 @@ package com.phuuun.legato.playback
 
 import com.phuuun.legato.library.trackFromRow
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -22,7 +23,14 @@ class MediaItemsTest {
         assertEquals("Halo", m.title.toString())
         assertEquals("Beyoncé", m.artist.toString())
         assertEquals("I Am... Sasha Fierce", m.albumTitle.toString())
-        assertEquals(track.artUri, m.artworkUri)
         assertEquals(track.uri, item.localConfiguration?.uri)
     }
+
+    // Media3 loads artworkUri by reading the whole resource into memory: pointing it at the audio file
+    // pulled a 300 MB WAV into RAM for every notification update. The cover travels in extras instead.
+    @Test
+    fun artwork_uri_is_never_the_audio_file() = assertNull(track.toMediaItem().mediaMetadata.artworkUri)
+
+    @Test
+    fun cover_travels_with_the_item() = assertEquals(track.artUri, track.toMediaItem().coverUri())
 }

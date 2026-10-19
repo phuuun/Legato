@@ -36,6 +36,7 @@ import androidx.compose.ui.unit.dp
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
+import com.phuuun.legato.playback.coverUri
 import com.phuuun.legato.playback.moveItem
 import com.phuuun.legato.playback.removeItem
 import com.phuuun.legato.ui.components.Artwork
@@ -83,7 +84,7 @@ fun QueueSheet(player: Player, onDismiss: () -> Unit) {
                         .padding(start = 20.dp, end = 4.dp),
                     verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
-                    Artwork(item.mediaMetadata.artworkUri, Modifier.size(40.dp).clip(RoundedCornerShape(6.dp)))
+                    Artwork(item.coverUri(), Modifier.size(40.dp).clip(RoundedCornerShape(6.dp)))
                     Column(Modifier.weight(1f)) {
                         Text(item.mediaMetadata.title?.toString().orEmpty(), style = MaterialTheme.typography.labelLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         Text(item.mediaMetadata.artist?.toString().orEmpty(), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)

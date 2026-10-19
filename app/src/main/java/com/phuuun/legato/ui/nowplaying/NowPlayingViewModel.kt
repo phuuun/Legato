@@ -8,6 +8,7 @@ import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.common.util.Util
 import androidx.media3.session.MediaController
+import com.phuuun.legato.playback.coverUri
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.delay
@@ -50,9 +51,10 @@ class NowPlayingViewModel(val controller: StateFlow<MediaController?>) : ViewMod
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
     private fun MediaController.snapshot(): NowPlayingState? {
-        val m = currentMediaItem?.mediaMetadata ?: return null
+        val item = currentMediaItem ?: return null
+        val m = item.mediaMetadata
         return NowPlayingState(
-            m.title?.toString().orEmpty(), m.artist?.toString().orEmpty(), m.artworkUri,
+            m.title?.toString().orEmpty(), m.artist?.toString().orEmpty(), item.coverUri(),
             currentPosition, duration, !Util.shouldShowPlayButton(this), shuffleModeEnabled, repeatMode,
             currentMediaItem?.mediaId?.toLongOrNull(),
         )
