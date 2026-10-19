@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -27,6 +28,7 @@ import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.ArrowDropDown
 import androidx.compose.material.icons.rounded.ContentPaste
 import androidx.compose.material3.Button
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -46,6 +48,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshots.SnapshotStateList
+import androidx.compose.runtime.toMutableStateList
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -59,22 +63,23 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import com.phuuun.legato.converter.DownloadJob
+import com.phuuun.legato.converter.PickedVideo
+import com.phuuun.legato.converter.Playlist
+import com.phuuun.legato.converter.YouTubeLink
+import com.phuuun.legato.converter.bookJobs
+import com.phuuun.legato.converter.musicJobs
+import com.phuuun.legato.converter.playlistUrl
 import com.phuuun.legato.converter.DownloadQueue
 import com.phuuun.legato.converter.DownloadService
 import com.phuuun.legato.converter.JobState
 import com.phuuun.legato.converter.Video
 import com.phuuun.legato.converter.YouTube
-import com.phuuun.legato.converter.bookFileName
 import com.phuuun.legato.converter.guessBook
 import com.phuuun.legato.converter.guessSong
-import com.phuuun.legato.converter.musicFileName
 import com.phuuun.legato.converter.parseYouTube
 import com.phuuun.legato.converter.videoUrl
 import com.phuuun.legato.library.FolderKind
 import com.phuuun.legato.library.FolderStore
-import com.phuuun.legato.library.edit.BookEdit
-import com.phuuun.legato.library.edit.MusicEdit
-import com.phuuun.legato.library.edit.properties
 import com.phuuun.legato.ui.components.LegatoHeader
 import com.phuuun.legato.ui.edit.Field
 import com.phuuun.legato.ui.nowplaying.formatTime
@@ -88,7 +93,10 @@ private sealed interface Fetch {
     data object Idle : Fetch
     data object Loading : Fetch
     data class Error(val message: String) : Fetch
+    /** A video opened from inside a playlist: which one did they mean? */
+    data class Ask(val link: YouTubeLink) : Fetch
     data class One(val video: Video) : Fetch
+    data class Many(val playlist: Playlist) : Fetch
 }
 
 /** Link in, preview with guessed tags, pick where it goes, download; the queue below shows what's happening. */
@@ -101,20 +109,34 @@ fun ConverterScreen(initialLink: String?, folders: FolderStore, downloads: Downl
     var fetch by remember { mutableStateOf<Fetch>(Fetch.Idle) }
     val jobs by downloads.jobs.collectAsState()
     val askNotifications = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {}
+    // The playlist's rows live up here: the list is long, so its rows are LazyColumn items, not one big card.
+    val picks = remember(fetch) {
+        (fetch as? Fetch.Many)?.playlist?.videos.orEmpty().map { v -> guessSong(v.title, v.uploader).let { PickedVideo(v, it.artist, it.title, true) } }.toMutableStateList()
+    }
 
+    fun loadVideo(id: String) {
+        fetch = Fetch.Loading
+        scope.launch { fetch = try { Fetch.One(YouTube.video(videoUrl(id))) } catch (e: Exception) { Fetch.Error(e.message ?: "Couldn't load that video") } }
+    }
+    fun loadPlaylist(id: String) {
+        fetch = Fetch.Loading
+        scope.launch { fetch = try { Fetch.Many(YouTube.playlist(playlistUrl(id))) } catch (e: Exception) { Fetch.Error(e.message ?: "Couldn't load that playlist") } }
+    }
     fun load(text: String) {
         val parsed = parseYouTube(text)
-        if (parsed?.video == null) { fetch = Fetch.Error(if (parsed == null) "That isn't a YouTube link" else "Playlists come next"); return }
-        fetch = Fetch.Loading
-        scope.launch {
-            fetch = try { Fetch.One(YouTube.video(videoUrl(parsed.video))) } catch (e: Exception) { Fetch.Error(e.message ?: "Couldn't load that video") }
+        when {
+            parsed == null -> fetch = Fetch.Error("That isn't a YouTube link")
+            parsed.video != null && parsed.playlist != null -> fetch = Fetch.Ask(parsed)
+            parsed.video != null -> loadVideo(parsed.video)
+            else -> loadPlaylist(parsed.playlist!!)
         }
     }
     LaunchedEffect(initialLink) { if (initialLink != null) { link = initialLink; load(initialLink) } }
 
-    fun queue(job: DownloadJob, kind: FolderKind) {
-        folders.setLastFolder(kind, job.folder)
-        downloads.add(listOf(job))
+    fun queue(batch: List<DownloadJob>, kind: FolderKind) {
+        if (batch.isEmpty()) return
+        folders.setLastFolder(kind, batch.first().folder)
+        downloads.add(batch)
         DownloadService.start(context)
         if (Build.VERSION.SDK_INT >= 33 && ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
             askNotifications.launch(Manifest.permission.POST_NOTIFICATIONS)
@@ -142,9 +164,18 @@ fun ConverterScreen(initialLink: String?, folders: FolderStore, downloads: Downl
                 )
                 Fetch.Loading -> Box(Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
                 is Fetch.Error -> Text(f.message, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(20.dp))
-                is Fetch.One -> VideoCard(f.video, folders, downloads) { job, kind -> queue(job, kind) }
+                is Fetch.Ask -> Column(Modifier.padding(20.dp)) {
+                    Text("This video is part of a playlist.", style = MaterialTheme.typography.bodyMedium)
+                    Row {
+                        TextButton(onClick = { loadVideo(f.link.video!!) }) { Text("Just this video") }
+                        TextButton(onClick = { loadPlaylist(f.link.playlist!!) }) { Text("Whole playlist") }
+                    }
+                }
+                is Fetch.One -> VideoCard(f.video, folders, downloads) { batch, kind -> queue(batch, kind) }
+                is Fetch.Many -> Unit
             }
         }
+        (fetch as? Fetch.Many)?.let { playlist(it.playlist, picks, folders, downloads) { batch, kind -> queue(batch, kind) } }
         if (jobs.isNotEmpty()) {
             item {
                 Row(Modifier.fillMaxWidth().padding(start = 20.dp, end = 8.dp, top = 16.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -158,7 +189,7 @@ fun ConverterScreen(initialLink: String?, folders: FolderStore, downloads: Downl
 }
 
 @Composable
-private fun VideoCard(video: Video, folders: FolderStore, downloads: DownloadQueue, onDownload: (DownloadJob, FolderKind) -> Unit) {
+private fun VideoCard(video: Video, folders: FolderStore, downloads: DownloadQueue, onDownload: (List<DownloadJob>, FolderKind) -> Unit) {
     var kind by rememberSaveable { mutableStateOf(FolderKind.Music) }
     val song = remember(video) { guessSong(video.title, video.uploader) }
     val book = remember(video) { guessBook(video.title) }
@@ -176,16 +207,7 @@ private fun VideoCard(video: Video, folders: FolderStore, downloads: DownloadQue
             Text(video.title, style = MaterialTheme.typography.titleMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
             Text("${video.uploader} · ${formatTime(video.durationSec * 1000)}", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
-        Row(horizontalArrangement = Arrangement.spacedBy(20.dp)) {
-            FolderKind.entries.forEach { k ->
-                Text(
-                    if (k == FolderKind.Music) "MUSIC" else "AUDIOBOOK", style = MaterialTheme.typography.labelSmall,
-                    fontWeight = if (k == kind) FontWeight.Bold else FontWeight.Normal,
-                    color = if (k == kind) MaterialTheme.colorScheme.onBackground else MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.clickable { kind = k }.padding(vertical = 8.dp),
-                )
-            }
-        }
+        KindToggle(kind) { kind = it }
         if (kind == FolderKind.Music) {
             Field("Artist", artist) { artist = it }
             Field("Title", title) { title = it }
@@ -199,11 +221,90 @@ private fun VideoCard(video: Video, folders: FolderStore, downloads: DownloadQue
             enabled = folder != null,
             onClick = {
                 val dest = folder ?: return@Button
-                val (props, name, label) = if (kind == FolderKind.Music) Triple(MusicEdit(title, listOf(artist), "").properties(), musicFileName(artist, title), title)
-                else Triple(BookEdit(bookTitle, null, author, narrator).properties(), bookFileName(bookTitle), bookTitle)
-                onDownload(DownloadJob(downloads.nextId(), video.url, label, dest, name, props, video.thumbnail), kind)
+                onDownload(
+                    if (kind == FolderKind.Music) musicJobs(listOf(PickedVideo(video, artist, title, true)), dest, downloads.nextId())
+                    else bookJobs(listOf(video), bookTitle, author, narrator, dest, downloads.nextId()),
+                    kind,
+                )
             },
         ) { Text("Download") }
+    }
+}
+
+@Composable
+private fun KindToggle(kind: FolderKind, onKind: (FolderKind) -> Unit) =
+    Row(horizontalArrangement = Arrangement.spacedBy(20.dp)) {
+        FolderKind.entries.forEach { k ->
+            Text(
+                if (k == FolderKind.Music) "MUSIC" else "AUDIOBOOK", style = MaterialTheme.typography.labelSmall,
+                fontWeight = if (k == kind) FontWeight.Bold else FontWeight.Normal,
+                color = if (k == kind) MaterialTheme.colorScheme.onBackground else MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.clickable { onKind(k) }.padding(vertical = 8.dp),
+            )
+        }
+    }
+
+/**
+ * A playlist as list items: header with MUSIC / AUDIOBOOK, one row per video (ticked, with its guess for
+ * music), then where to save and "Download N". An audiobook playlist is one book: one title for all.
+ */
+private fun LazyListScope.playlist(
+    playlist: Playlist, picks: SnapshotStateList<PickedVideo>, folders: FolderStore, downloads: DownloadQueue, onDownload: (List<DownloadJob>, FolderKind) -> Unit,
+) {
+    item(key = "playlist-head") {
+        Column(Modifier.padding(horizontal = 20.dp, vertical = 8.dp)) {
+            Text(playlist.name, style = MaterialTheme.typography.titleMedium)
+            Text("${playlist.videos.size} videos", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+    }
+    item(key = "playlist-form") { PlaylistForm(playlist, picks, folders, downloads, onDownload) }
+}
+
+@Composable
+private fun PlaylistForm(playlist: Playlist, picks: SnapshotStateList<PickedVideo>, folders: FolderStore, downloads: DownloadQueue, onDownload: (List<DownloadJob>, FolderKind) -> Unit) {
+    var kind by rememberSaveable { mutableStateOf(FolderKind.Music) }
+    val book = remember(playlist) { guessBook(playlist.name) }
+    var bookTitle by remember(playlist) { mutableStateOf(book.title) }
+    var author by remember(playlist) { mutableStateOf(book.author) }
+    var narrator by remember(playlist) { mutableStateOf("") }
+    val choices by remember(kind) { folders.folders(kind) }.collectAsState(emptySet())
+    var folder by remember(kind, choices) { mutableStateOf(folders.lastFolder(kind)?.takeIf { it in choices } ?: choices.sorted().firstOrNull()) }
+    val ticked = picks.count { it.include }
+
+    Column(Modifier.padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        KindToggle(kind) { kind = it }
+        if (kind == FolderKind.Audiobooks) {
+            Field("Book title", bookTitle) { bookTitle = it }
+            Field("Author", author) { author = it }
+            Field("Narrator", narrator) { narrator = it }
+        }
+        picks.forEachIndexed { i, p ->
+            Row(verticalAlignment = Alignment.Top) {
+                Checkbox(p.include, onCheckedChange = { picks[i] = p.copy(include = it) })
+                Column(Modifier.weight(1f).padding(top = 12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text(
+                        "${i + 1}. ${p.video.title} · ${formatTime(p.video.durationSec * 1000)}", style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2, overflow = TextOverflow.Ellipsis,
+                    )
+                    if (kind == FolderKind.Music && p.include) {
+                        Field("Artist", p.artist) { picks[i] = p.copy(artist = it) }
+                        Field("Title", p.title) { picks[i] = p.copy(title = it) }
+                    }
+                }
+            }
+        }
+        Destination(kind, choices, folder, onPick = { folder = it }, onAdd = { folders.add(kind, it); folder = it })
+        Button(
+            enabled = folder != null && ticked > 0,
+            onClick = {
+                val dest = folder ?: return@Button
+                onDownload(
+                    if (kind == FolderKind.Music) musicJobs(picks, dest, downloads.nextId())
+                    else bookJobs(picks.filter { it.include }.map { it.video }, bookTitle, author, narrator, dest, downloads.nextId()),
+                    kind,
+                )
+            },
+        ) { Text("Download $ticked") }
     }
 }
 

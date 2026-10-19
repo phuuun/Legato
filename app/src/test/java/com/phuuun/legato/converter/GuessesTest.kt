@@ -30,4 +30,24 @@ class GuessesTest {
 
     @Test
     fun book_author_stops_at_a_pipe() = assertEquals(BookGuess("Emma", "Jane Austen"), guessBook("Emma by Jane Austen | Unabridged"))
+
+    @Test
+    fun audiobook_playlist_is_one_book_in_order() {
+        val vids = listOf(Video("u1", "Part 1", "c", 60, null), Video("u2", "Part 2", "c", 60, null))
+        val jobs = bookJobs(vids, "Dune", "Frank Herbert", "", "Audiobooks/", 10)
+        assertEquals(listOf("01 Part 1.m4a", "02 Part 2.m4a"), jobs.map { it.fileName })
+        assertEquals(listOf("1", "2"), jobs.map { it.properties["TRACKNUMBER"] })
+        assertEquals(setOf("Dune"), jobs.map { it.properties["ALBUM"] }.toSet())
+        assertEquals(listOf(10L, 11L), jobs.map { it.id })
+    }
+
+    @Test
+    fun single_video_book_is_one_file() =
+        assertEquals("Dune.m4a", bookJobs(listOf(Video("u", "Dune", "c", 60, null)), "Dune", "", "", "A/", 1).single().fileName)
+
+    @Test
+    fun music_jobs_skip_unticked() = assertEquals(
+        listOf("A - B.m4a"),
+        musicJobs(listOf(PickedVideo(Video("u1", "x", "c", 1, null), "A", "B", true), PickedVideo(Video("u2", "y", "c", 1, null), "C", "D", false)), "Music/", 1).map { it.fileName },
+    )
 }
