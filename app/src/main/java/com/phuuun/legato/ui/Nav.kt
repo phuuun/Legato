@@ -47,10 +47,13 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.phuuun.legato.library.FolderKind
 import com.phuuun.legato.library.FolderStore
+import com.phuuun.legato.library.asAlbum
+import com.phuuun.legato.library.groupBooks
 import com.phuuun.legato.library.LibraryRepository
 import com.phuuun.legato.library.PlaylistRepository
 import com.phuuun.legato.library.Track
 import com.phuuun.legato.playback.PlayerConnection
+import com.phuuun.legato.ui.audiobooks.AudiobooksScreen
 import com.phuuun.legato.ui.components.LegatoHeader
 import com.phuuun.legato.ui.components.MiniPlayer
 import com.phuuun.legato.ui.library.AlbumScreen
@@ -76,7 +79,7 @@ private enum class Section(val route: String, val label: String, val icon: Image
 }
 
 @Composable
-fun LegatoNav(library: LibraryRepository, player: PlayerConnection, playlistRepo: PlaylistRepository, folders: FolderStore) {
+fun LegatoNav(library: LibraryRepository, audiobooks: LibraryRepository, player: PlayerConnection, playlistRepo: PlaylistRepository, folders: FolderStore) {
     val nav = rememberNavController()
     // One view model for every destination, so the loaded library and the search box survive navigation.
     val vm: LibraryViewModel = viewModel(factory = viewModelFactory { initializer { LibraryViewModel(library) } })
@@ -94,6 +97,9 @@ fun LegatoNav(library: LibraryRepository, player: PlayerConnection, playlistRepo
     var adding by remember { mutableStateOf<List<Track>?>(null) }
     val toast = { text: String -> Toast.makeText(context, text, Toast.LENGTH_SHORT).show() }
     val onSettings = { nav.navigate("settings") { launchSingleTop = true } }
+    val audiobookTracks by audiobooks.tracks.collectAsState(emptyList())
+    val books = remember(audiobookTracks) { groupBooks(audiobookTracks) }
+    val audiobookFolders by remember { folders.folders(FolderKind.Audiobooks) }.collectAsState(emptySet())
     val actions = remember {
         TrackActions(
             queue = { tracks, next -> player.queue(tracks, next); toast(if (next) "Playing next" else "Added to queue") },
@@ -132,7 +138,19 @@ fun LegatoNav(library: LibraryRepository, player: PlayerConnection, playlistRepo
                     )
                 }
             }
-            composable(Section.Audiobooks.route) { ComingSoon("Audiobooks", "Your audiobooks will live here, with your place saved in each one.", onSettings) }
+            // A one-file book plays straight away; chapter files open as a list, like an album.
+            navigation(startDestination = "books", route = Section.Audiobooks.route) {
+                composable("books") {
+                    AudiobooksScreen(
+                        books, audiobookFolders.isNotEmpty(), actions = actions, onSettings = onSettings,
+                        onBook = { b -> if (b.chapters.size == 1) onPlay(b.chapters, 0) else nav.navigate("book/${b.id}") },
+                    )
+                }
+                composable("book/{id}", listOf(navArgument("id") { type = NavType.LongType })) { e ->
+                    val id = e.arguments?.getLong("id")
+                    AlbumScreen(books.firstOrNull { it.id == id }?.asAlbum(), onBack = { nav.popBackStack() }, onPlay = onPlay, actions = actions)
+                }
+            }
             composable(Section.Converter.route) { ComingSoon("Converter", "Paste a YouTube link and save the audio to this phone.", onSettings) }
             composable("settings") {
                 SettingsScreen(onBack = { nav.popBackStack() }) { section ->
