@@ -35,7 +35,7 @@ fun Back(onBack: () -> Unit) =
     IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back") }
 
 @Composable
-fun AlbumScreen(album: Album?, onBack: () -> Unit, onPlay: (List<Track>, Int) -> Unit, actions: TrackActions) {
+fun AlbumScreen(album: Album?, onBack: () -> Unit, onPlay: (List<Track>, Int) -> Unit, actions: TrackActions, header: @Composable () -> Unit = {}) {
     Column(Modifier.fillMaxSize().systemBarsPadding()) {
         Back(onBack)
         if (album == null) { Empty("Album not found", "It may have been deleted."); return }
@@ -45,6 +45,7 @@ fun AlbumScreen(album: Album?, onBack: () -> Unit, onPlay: (List<Track>, Int) ->
                     Artwork(album.artUri, Modifier.fillMaxWidth().aspectRatio(1f).clip(RoundedCornerShape(10.dp)))
                     Text(album.title, style = MaterialTheme.typography.headlineSmall, modifier = Modifier.padding(top = 16.dp))
                     Text(album.artist, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    header()
                 }
             }
             items(album.tracks, key = { it.id }) { t -> SongRow(t, onClick = { onPlay(album.tracks, album.tracks.indexOf(t)) }, actions = actions) }

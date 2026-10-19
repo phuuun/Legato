@@ -48,7 +48,11 @@ import androidx.navigation.compose.navigation
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.phuuun.legato.library.FolderKind
+import com.phuuun.legato.library.Book
 import com.phuuun.legato.library.FolderStore
+import com.phuuun.legato.library.ProgressStore
+import com.phuuun.legato.library.chapterStart
+import com.phuuun.legato.library.resumePoint
 import com.phuuun.legato.library.asAlbum
 import com.phuuun.legato.library.edit.CoverChange
 import com.phuuun.legato.library.edit.TagWriter
@@ -60,6 +64,7 @@ import com.phuuun.legato.library.PlaylistRepository
 import com.phuuun.legato.library.Track
 import com.phuuun.legato.playback.PlayerConnection
 import com.phuuun.legato.ui.audiobooks.AudiobooksScreen
+import com.phuuun.legato.ui.audiobooks.ResumeButton
 import com.phuuun.legato.ui.components.LegatoHeader
 import com.phuuun.legato.ui.edit.BulkFixScreen
 import com.phuuun.legato.ui.edit.EditScreen
@@ -87,7 +92,7 @@ private enum class Section(val route: String, val label: String, val icon: Image
 }
 
 @Composable
-fun LegatoNav(library: LibraryRepository, audiobooks: LibraryRepository, player: PlayerConnection, playlistRepo: PlaylistRepository, folders: FolderStore, tagWriter: TagWriter) {
+fun LegatoNav(library: LibraryRepository, audiobooks: LibraryRepository, player: PlayerConnection, playlistRepo: PlaylistRepository, folders: FolderStore, tagWriter: TagWriter, progress: ProgressStore) {
     val nav = rememberNavController()
     // One view model for every destination, so the loaded library and the search box survive navigation.
     val vm: LibraryViewModel = viewModel(factory = viewModelFactory { initializer { LibraryViewModel(library) } })
@@ -108,6 +113,10 @@ fun LegatoNav(library: LibraryRepository, audiobooks: LibraryRepository, player:
     val audiobookTracks by audiobooks.tracks.collectAsState(emptyList())
     val books = remember(audiobookTracks) { groupBooks(audiobookTracks) }
     val audiobookFolders by remember { folders.folders(FolderKind.Audiobooks) }.collectAsState(emptySet())
+    val spots by remember { progress.spots() }.collectAsState(emptyMap())
+    // A book picks up where it stopped (less 5 s); a chapter picked by hand picks up at its own spot.
+    val playBook = { b: Book -> val (i, ms) = resumePoint(b.chapters, spots); player.play(b.chapters, i, ms, audiobook = true); expanded = true }
+    val playChapter: (List<Track>, Int) -> Unit = { chapters, i -> player.play(chapters, i, chapterStart(chapters[i], spots[chapters[i].id]), audiobook = true); expanded = true }
     val actions = remember {
         TrackActions(
             queue = { tracks, next -> player.queue(tracks, next); toast(if (next) "Playing next" else "Added to queue") },
@@ -151,13 +160,16 @@ fun LegatoNav(library: LibraryRepository, audiobooks: LibraryRepository, player:
             navigation(startDestination = "books", route = Section.Audiobooks.route) {
                 composable("books") {
                     AudiobooksScreen(
-                        books, audiobookFolders.isNotEmpty(), actions = actions, onSettings = onSettings,
-                        onBook = { b -> if (b.chapters.size == 1) onPlay(b.chapters, 0) else nav.navigate("book/${b.id}") },
+                        books, spots, audiobookFolders.isNotEmpty(), actions = actions, onSettings = onSettings,
+                        onBook = { b -> if (b.chapters.size == 1) playBook(b) else nav.navigate("book/${b.id}") },
                     )
                 }
                 composable("book/{id}", listOf(navArgument("id") { type = NavType.LongType })) { e ->
                     val id = e.arguments?.getLong("id")
-                    AlbumScreen(books.firstOrNull { it.id == id }?.asAlbum(), onBack = { nav.popBackStack() }, onPlay = onPlay, actions = actions)
+                    val book = books.firstOrNull { it.id == id }
+                    AlbumScreen(book?.asAlbum(), onBack = { nav.popBackStack() }, onPlay = playChapter, actions = actions) {
+                        if (book != null) ResumeButton(book, spots) { playBook(book) }
+                    }
                 }
             }
             composable(Section.Converter.route) { ComingSoon("Converter", "Paste a YouTube link and save the audio to this phone.", onSettings) }

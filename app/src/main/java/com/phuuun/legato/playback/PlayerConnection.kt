@@ -20,9 +20,10 @@ class PlayerConnection(context: Context) {
     }
 
     // ponytail: a tap in the first moments before the controller connects is dropped; queue it if that ever bites.
-    fun play(tracks: List<Track>, startIndex: Int) {
+    /** [audiobook] marks the items so their spots are saved; [startMs] is where in the start item to begin. */
+    fun play(tracks: List<Track>, startIndex: Int, startMs: Long = 0, audiobook: Boolean = false) {
         val c = controller.value ?: return
-        c.setMediaItems(tracks.map { it.toMediaItem() }, startIndex, 0)
+        c.setMediaItems(tracks.map { it.toMediaItem(audiobook) }, startIndex, startMs)
         c.prepare()
         c.play()
     }

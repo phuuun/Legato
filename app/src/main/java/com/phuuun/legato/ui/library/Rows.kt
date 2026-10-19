@@ -66,13 +66,14 @@ fun SongRow(track: Track, onClick: () -> Unit, actions: TrackActions, modifier: 
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-fun AlbumCard(album: Album, onClick: () -> Unit, actions: TrackActions, modifier: Modifier = Modifier) {
+fun AlbumCard(album: Album, onClick: () -> Unit, actions: TrackActions, modifier: Modifier = Modifier, below: @Composable () -> Unit = {}) {
     var menu by remember { mutableStateOf(false) }
     val haptics = LocalHapticFeedback.current
     Column(modifier.combinedClickable(onClick = onClick, onLongClick = { haptics.performHapticFeedback(HapticFeedbackType.LongPress); menu = true }).padding(bottom = 8.dp)) {
         Artwork(album.artUri, Modifier.fillMaxWidth().aspectRatio(1f).clip(RoundedCornerShape(8.dp)))
         Text(album.title, style = MaterialTheme.typography.labelLarge, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 8.dp))
         Text(album.artist, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        below()
         TrackMenu(menu, { menu = false }, album.tracks, actions)
     }
 }

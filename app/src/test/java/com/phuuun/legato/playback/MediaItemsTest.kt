@@ -1,5 +1,6 @@
 package com.phuuun.legato.playback
 
+import androidx.media3.common.MediaMetadata
 import com.phuuun.legato.library.trackFromRow
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -33,4 +34,10 @@ class MediaItemsTest {
 
     @Test
     fun cover_travels_with_the_item() = assertEquals(track.artUri, track.toMediaItem().coverUri())
+
+    @Test
+    fun audiobook_items_are_marked_so_the_service_saves_their_spot() {
+        assertEquals(MediaMetadata.MEDIA_TYPE_AUDIO_BOOK_CHAPTER, track.toMediaItem(audiobook = true).mediaMetadata.mediaType)
+        assertNull(track.toMediaItem().mediaMetadata.mediaType)
+    }
 }
