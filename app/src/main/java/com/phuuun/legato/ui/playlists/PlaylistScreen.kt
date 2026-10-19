@@ -10,7 +10,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material.icons.Icons
@@ -33,8 +32,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.phuuun.legato.ui.components.screen
 import com.phuuun.legato.library.Track
 import com.phuuun.legato.library.db.Playlist
+import com.phuuun.legato.ui.components.occurrenceKeys
 import com.phuuun.legato.ui.components.rememberReorder
 import com.phuuun.legato.ui.library.Back
 import com.phuuun.legato.ui.library.Empty
@@ -60,7 +61,7 @@ fun PlaylistScreen(
     var deleting by remember { mutableStateOf(false) }
     val reorder = rememberReorder(RowHeight, onMove)
 
-    Column(Modifier.fillMaxSize().systemBarsPadding()) {
+    Column(Modifier.screen()) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Back(onBack)
             Spacer(Modifier.weight(1f))
@@ -80,9 +81,10 @@ fun PlaylistScreen(
         )
         if (tracks.isEmpty()) Empty("No songs yet", "Long-press a song or an album and pick Add to playlist.")
         else LazyColumn(Modifier.fillMaxSize()) {
-            itemsIndexed(tracks) { pos, t ->
+            val keys = occurrenceKeys(tracks) { it.id }
+            itemsIndexed(tracks, key = { pos, _ -> keys[pos] }) { pos, t ->
                 Row(
-                    Modifier.fillMaxWidth().height(RowHeight).then(reorder.row(pos)).background(MaterialTheme.colorScheme.background),
+                    Modifier.animateItem(placementSpec = null).fillMaxWidth().height(RowHeight).then(reorder.row(pos)).background(MaterialTheme.colorScheme.background),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     SongRow(t, onClick = { onPlay(tracks, pos) }, actions = actions, modifier = Modifier.weight(1f))

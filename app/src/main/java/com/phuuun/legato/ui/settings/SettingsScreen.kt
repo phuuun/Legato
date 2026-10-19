@@ -8,7 +8,6 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -22,6 +21,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.phuuun.legato.ui.components.screen
 import com.phuuun.legato.ui.library.Back
 
 enum class SettingsSection(val label: String) { Music("MUSIC"), Audiobooks("AUDIOBOOKS"), Converter("CONVERTER") }
@@ -30,7 +30,7 @@ enum class SettingsSection(val label: String) { Music("MUSIC"), Audiobooks("AUDI
 @Composable
 fun SettingsScreen(onBack: () -> Unit, pane: @Composable (SettingsSection) -> Unit) {
     var selected by rememberSaveable { mutableStateOf(SettingsSection.Music) }
-    Column(Modifier.fillMaxSize().systemBarsPadding()) {
+    Column(Modifier.screen()) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Back(onBack)
             Text("Settings", style = MaterialTheme.typography.headlineSmall)

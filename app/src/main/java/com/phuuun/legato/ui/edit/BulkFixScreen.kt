@@ -4,9 +4,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material.icons.Icons
@@ -28,6 +26,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.phuuun.legato.ui.components.screen
 import com.phuuun.legato.library.Track
 import com.phuuun.legato.library.albumTag
 import com.phuuun.legato.library.edit.FixRow
@@ -48,7 +47,7 @@ fun BulkFixScreen(rows: List<FixRow>, onBack: () -> Unit, write: suspend (Track,
     val scope = rememberCoroutineScope()
     val ticked = items.count { it.include }
 
-    Column(Modifier.fillMaxSize().systemBarsPadding().imePadding()) {
+    Column(Modifier.screen()) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Back(onBack)
             Text("Fix unknown artists", style = MaterialTheme.typography.headlineSmall, modifier = Modifier.weight(1f))
@@ -71,7 +70,7 @@ fun BulkFixScreen(rows: List<FixRow>, onBack: () -> Unit, write: suspend (Track,
         if (items.isEmpty()) Empty("Nothing to fix", "Every song has an artist.")
         else LazyColumn(Modifier.fillMaxSize()) {
             itemsIndexed(items, key = { _, r -> r.track.id }) { i, r ->
-                Row(Modifier.padding(start = 8.dp, end = 8.dp, top = 8.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                Row(Modifier.animateItem().padding(start = 8.dp, end = 8.dp, top = 8.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                     Checkbox(r.include, onCheckedChange = { items[i] = r.copy(include = it) })
                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         Text(r.track.title, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)

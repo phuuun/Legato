@@ -1,5 +1,7 @@
 package com.phuuun.legato.ui.library
 
+import androidx.compose.animation.Crossfade
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -9,7 +11,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
@@ -29,6 +30,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.phuuun.legato.ui.components.screen
 import com.phuuun.legato.library.Track
 import com.phuuun.legato.ui.components.LegatoHeader
 
@@ -46,7 +48,7 @@ fun LibraryScreen(
     onSettings: () -> Unit,
 ) {
     var tab by rememberSaveable { mutableStateOf(Tab.Songs) }
-    Column(Modifier.fillMaxSize().systemBarsPadding()) {
+    Column(Modifier.screen()) {
         LegatoHeader(onSettings)
         TextField(
             value = state.query, onValueChange = onQuery, singleLine = true,
@@ -74,15 +76,20 @@ fun LibraryScreen(
             !state.loaded -> Unit
             state.tracks.isEmpty() -> Empty("No music found", "Add some files to this phone and they'll show up here.")
             state.query.isNotBlank() -> SearchBody(state.results, onPlay, onAlbum, onArtist, actions)
-            tab == Tab.Songs -> LazyColumn(Modifier.fillMaxSize()) {
-                items(state.tracks, key = { it.id }) { t -> SongRow(t, onClick = { onPlay(state.tracks, state.tracks.indexOf(t)) }, actions = actions) }
+            // Tabs switch by tap only (a swipe changes section); the content crossfades instead of snapping.
+            else -> Crossfade(tab, animationSpec = tween(200), label = "library tab") { t ->
+                when (t) {
+                    Tab.Songs -> LazyColumn(Modifier.fillMaxSize()) {
+                        items(state.tracks, key = { it.id }) { t -> SongRow(t, onClick = { onPlay(state.tracks, state.tracks.indexOf(t)) }, actions = actions) }
+                    }
+                    Tab.Albums -> LazyVerticalGrid(
+                        GridCells.Fixed(2), Modifier.fillMaxSize(), contentPadding = PaddingValues(20.dp),
+                        horizontalArrangement = Arrangement.spacedBy(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) { items(state.albums, key = { it.id }) { a -> AlbumCard(a, onClick = { onAlbum(a.id) }, actions = actions) } }
+                    Tab.Artists -> LazyColumn(Modifier.fillMaxSize()) { items(state.artists, key = { it.name }) { a -> ArtistRow(a, onClick = { onArtist(a.name) }) } }
+                    Tab.Playlists -> playlistsTab()
+                }
             }
-            tab == Tab.Albums -> LazyVerticalGrid(
-                GridCells.Fixed(2), Modifier.fillMaxSize(), contentPadding = PaddingValues(20.dp),
-                horizontalArrangement = Arrangement.spacedBy(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp),
-            ) { items(state.albums, key = { it.id }) { a -> AlbumCard(a, onClick = { onAlbum(a.id) }, actions = actions) } }
-            tab == Tab.Playlists -> playlistsTab()
-            else -> LazyColumn(Modifier.fillMaxSize()) { items(state.artists, key = { it.name }) { a -> ArtistRow(a, onClick = { onArtist(a.name) }) } }
         }
     }
 }

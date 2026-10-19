@@ -16,9 +16,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
@@ -48,6 +46,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.compose.runtime.toMutableStateList
 import androidx.compose.ui.Alignment
@@ -62,6 +61,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
+import com.phuuun.legato.ui.components.screen
 import com.phuuun.legato.converter.DownloadJob
 import com.phuuun.legato.converter.PickedVideo
 import com.phuuun.legato.converter.Playlist
@@ -84,12 +84,13 @@ import com.phuuun.legato.ui.components.LegatoHeader
 import com.phuuun.legato.ui.edit.Field
 import com.phuuun.legato.ui.nowplaying.formatTime
 import com.phuuun.legato.ui.settings.rememberFolderPicker
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.net.URI
 
-private sealed interface Fetch {
+internal sealed interface Fetch {
     data object Idle : Fetch
     data object Loading : Fetch
     data class Error(val message: String) : Fetch
@@ -99,29 +100,37 @@ private sealed interface Fetch {
     data class Many(val playlist: Playlist) : Fetch
 }
 
-/** Link in, preview with guessed tags, pick where it goes, download; the queue below shows what's happening. */
-@Composable
-fun ConverterScreen(initialLink: String?, onInitialLinkUsed: () -> Unit, folders: FolderStore, downloads: DownloadQueue, onSettings: () -> Unit) {
-    val context = LocalContext.current
-    val clipboard = LocalClipboardManager.current
-    val scope = rememberCoroutineScope()
-    var link by rememberSaveable { mutableStateOf(initialLink.orEmpty()) }
-    var fetch by remember { mutableStateOf<Fetch>(Fetch.Idle) }
-    val jobs by downloads.jobs.collectAsState()
-    val askNotifications = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {}
-    // The playlist's rows live up here: the list is long, so its rows are LazyColumn items, not one big card.
-    val picks = remember(fetch) {
-        (fetch as? Fetch.Many)?.playlist?.videos.orEmpty().map { v -> guessSong(v.title, v.uploader).let { PickedVideo(v, it.artist, it.title, true) } }.toMutableStateList()
-    }
+/**
+ * The converter's link and preview. It lives above the swipeable pages, so swiping away and back keeps a
+ * fetched preview, and a fetch keeps going while the page is off screen.
+ */
+class ConverterState(private val scope: CoroutineScope) {
+    var link by mutableStateOf("")
+    internal var fetch by mutableStateOf<Fetch>(Fetch.Idle)
+        private set
+
+    /** A playlist's rows with their (editable) guesses. */
+    val picks = mutableStateListOf<PickedVideo>()
 
     fun loadVideo(id: String) {
         fetch = Fetch.Loading
         scope.launch { fetch = try { Fetch.One(YouTube.video(videoUrl(id))) } catch (e: Exception) { Fetch.Error(e.message ?: "Couldn't load that video") } }
     }
+
     fun loadPlaylist(id: String) {
         fetch = Fetch.Loading
-        scope.launch { fetch = try { Fetch.Many(YouTube.playlist(playlistUrl(id))) } catch (e: Exception) { Fetch.Error(e.message ?: "Couldn't load that playlist") } }
+        scope.launch {
+            fetch = try {
+                val playlist = YouTube.playlist(playlistUrl(id))
+                picks.clear()
+                picks += playlist.videos.map { v -> guessSong(v.title, v.uploader).let { PickedVideo(v, it.artist, it.title, true) } }
+                Fetch.Many(playlist)
+            } catch (e: Exception) {
+                Fetch.Error(e.message ?: "Couldn't load that playlist")
+            }
+        }
     }
+
     fun load(text: String) {
         val parsed = parseYouTube(text)
         when {
@@ -131,6 +140,27 @@ fun ConverterScreen(initialLink: String?, onInitialLinkUsed: () -> Unit, folders
             else -> loadPlaylist(parsed.playlist!!)
         }
     }
+
+    fun clear() {
+        fetch = Fetch.Idle
+        link = ""
+        picks.clear()
+    }
+}
+
+/** Link in, preview with guessed tags, pick where it goes, download; the queue below shows what's happening. */
+@Composable
+fun ConverterScreen(state: ConverterState, initialLink: String?, onInitialLinkUsed: () -> Unit, folders: FolderStore, downloads: DownloadQueue, onSettings: () -> Unit) {
+    val context = LocalContext.current
+    val clipboard = LocalClipboardManager.current
+    var link by state::link
+    val fetch = state.fetch
+    val picks = state.picks
+    val jobs by downloads.jobs.collectAsState()
+    val askNotifications = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {}
+    val load = state::load
+    val loadVideo = state::loadVideo
+    val loadPlaylist = state::loadPlaylist
     LaunchedEffect(initialLink) {
         if (initialLink != null) { link = initialLink; load(initialLink); onInitialLinkUsed() }
     }
@@ -148,11 +178,10 @@ fun ConverterScreen(initialLink: String?, onInitialLinkUsed: () -> Unit, folders
         if (Build.VERSION.SDK_INT >= 33 && ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
             askNotifications.launch(Manifest.permission.POST_NOTIFICATIONS)
         }
-        fetch = Fetch.Idle
-        link = ""
+        state.clear()
     }
 
-    LazyColumn(Modifier.fillMaxSize().systemBarsPadding().imePadding()) {
+    LazyColumn(Modifier.screen()) {
         item { LegatoHeader(onSettings) }
         item {
             Row(Modifier.padding(horizontal = 20.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -195,7 +224,7 @@ fun ConverterScreen(initialLink: String?, onInitialLinkUsed: () -> Unit, folders
                     TextButton(onClick = downloads::clearFinished) { Text("Clear finished") }
                 }
             }
-            items(jobs.asReversed(), key = { it.id }) { job -> JobRow(job, onRetry = { downloads.retry(job.id); DownloadService.start(context) }) }
+            items(jobs.asReversed(), key = { it.id }) { job -> Box(Modifier.animateItem()) { JobRow(job, onRetry = { downloads.retry(job.id); DownloadService.start(context) }) } }
         }
     }
 }
@@ -205,11 +234,11 @@ private fun VideoCard(video: Video, folders: FolderStore, downloads: DownloadQue
     var kind by rememberSaveable { mutableStateOf(FolderKind.Music) }
     val song = remember(video) { guessSong(video.title, video.uploader) }
     val book = remember(video) { guessBook(video.title) }
-    var artist by remember(video) { mutableStateOf(song.artist) }
-    var title by remember(video) { mutableStateOf(song.title) }
-    var bookTitle by remember(video) { mutableStateOf(book.title) }
-    var author by remember(video) { mutableStateOf(book.author) }
-    var narrator by remember(video) { mutableStateOf("") }
+    var artist by rememberSaveable(video) { mutableStateOf(song.artist) }
+    var title by rememberSaveable(video) { mutableStateOf(song.title) }
+    var bookTitle by rememberSaveable(video) { mutableStateOf(book.title) }
+    var author by rememberSaveable(video) { mutableStateOf(book.author) }
+    var narrator by rememberSaveable(video) { mutableStateOf("") }
     val choices by remember(kind) { folders.folders(kind) }.collectAsState(emptySet())
     var folder by remember(kind, choices) { mutableStateOf(folders.lastFolder(kind)?.takeIf { it in choices } ?: choices.sorted().firstOrNull()) }
 
@@ -276,9 +305,9 @@ private fun LazyListScope.playlist(
 private fun PlaylistForm(playlist: Playlist, picks: SnapshotStateList<PickedVideo>, folders: FolderStore, downloads: DownloadQueue, onDownload: (List<DownloadJob>, FolderKind) -> Unit) {
     var kind by rememberSaveable { mutableStateOf(FolderKind.Music) }
     val book = remember(playlist) { guessBook(playlist.name) }
-    var bookTitle by remember(playlist) { mutableStateOf(book.title) }
-    var author by remember(playlist) { mutableStateOf(book.author) }
-    var narrator by remember(playlist) { mutableStateOf("") }
+    var bookTitle by rememberSaveable(playlist) { mutableStateOf(book.title) }
+    var author by rememberSaveable(playlist) { mutableStateOf(book.author) }
+    var narrator by rememberSaveable(playlist) { mutableStateOf("") }
     val choices by remember(kind) { folders.folders(kind) }.collectAsState(emptySet())
     var folder by remember(kind, choices) { mutableStateOf(folders.lastFolder(kind)?.takeIf { it in choices } ?: choices.sorted().firstOrNull()) }
     val ticked = picks.count { it.include }

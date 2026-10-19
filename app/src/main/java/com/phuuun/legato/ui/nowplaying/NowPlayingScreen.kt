@@ -10,7 +10,7 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
@@ -65,8 +65,8 @@ fun NowPlayingSheet(state: NowPlayingState, vm: NowPlayingViewModel, onDismiss: 
         shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp),
         dragHandle = null,
     ) {
-        Column(Modifier.fillMaxSize().navigationBarsPadding().padding(horizontal = 24.dp)) {
-            Box(Modifier.fillMaxWidth().padding(top = 8.dp)) {
+        Column(Modifier.fillMaxSize().safeDrawingPadding().padding(horizontal = 24.dp)) {
+            Box(Modifier.fillMaxWidth().padding(top = 12.dp)) {
                 IconButton(onClick = { scope.launch { sheet.hide() }.invokeOnCompletion { onDismiss() } }, modifier = Modifier.align(Alignment.CenterStart)) {
                     Icon(Icons.Rounded.KeyboardArrowDown, contentDescription = "Close")
                 }

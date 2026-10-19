@@ -13,10 +13,8 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -47,6 +45,7 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import com.phuuun.legato.ui.components.screen
 import com.phuuun.legato.library.FolderKind
 import com.phuuun.legato.library.Track
 import com.phuuun.legato.library.albumTag
@@ -69,7 +68,7 @@ import kotlinx.coroutines.launch
 @Composable
 fun EditScreen(track: Track?, kind: FolderKind, chapters: Int, onBack: () -> Unit, onSave: (properties: Map<String, String>, cover: CoverChange) -> Unit) {
     if (track == null) {
-        Column(Modifier.fillMaxSize().systemBarsPadding()) { Back(onBack); Empty("Not found", "It may have been deleted.") }
+        Column(Modifier.screen()) { Back(onBack); Empty("Not found", "It may have been deleted.") }
         return
     }
     val context = LocalContext.current
@@ -92,7 +91,7 @@ fun EditScreen(track: Track?, kind: FolderKind, chapters: Int, onBack: () -> Uni
     var author by rememberSaveable { mutableStateOf(track.artists.joinToString("; ")) }
     var narrator by rememberSaveable { mutableStateOf(track.composer) }
 
-    Column(Modifier.fillMaxSize().systemBarsPadding().imePadding()) {
+    Column(Modifier.screen()) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Back(onBack)
             Text("Edit", style = MaterialTheme.typography.headlineSmall, modifier = Modifier.weight(1f))

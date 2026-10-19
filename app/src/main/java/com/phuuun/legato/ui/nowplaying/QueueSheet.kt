@@ -40,6 +40,7 @@ import com.phuuun.legato.playback.coverUri
 import com.phuuun.legato.playback.moveItem
 import com.phuuun.legato.playback.removeItem
 import com.phuuun.legato.ui.components.Artwork
+import com.phuuun.legato.ui.components.occurrenceKeys
 import com.phuuun.legato.ui.components.rememberReorder
 
 private val RowHeight = 60.dp
@@ -73,12 +74,14 @@ fun QueueSheet(player: Player, onDismiss: () -> Unit) {
 
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true), containerColor = MaterialTheme.colorScheme.surface) {
         Text("QUEUE", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(start = 20.dp, bottom = 8.dp))
+        val keys = remember(q) { occurrenceKeys(q.order) { q.items[it].mediaId } }
         LazyColumn(state = list) {
-            itemsIndexed(q.order) { pos, index ->
+            // Rows fade in and out as they're added or removed; a drag already shows the move, so no slide on reorder.
+            itemsIndexed(q.order, key = { pos, _ -> keys[pos] }) { pos, index ->
                 val item = q.items[index]
                 val isCurrent = index == q.current
                 Row(
-                    Modifier.fillMaxWidth().height(RowHeight)
+                    Modifier.animateItem(placementSpec = null).fillMaxWidth().height(RowHeight)
                         .then(reorder.row(pos))
                         .background(if (isCurrent || reorder.dragging == pos) MaterialTheme.colorScheme.surfaceVariant else MaterialTheme.colorScheme.surface)
                         .padding(start = 20.dp, end = 4.dp),

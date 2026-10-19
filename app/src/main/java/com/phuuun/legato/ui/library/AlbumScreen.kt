@@ -8,7 +8,6 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
@@ -25,6 +24,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.dp
+import com.phuuun.legato.ui.components.screen
 import com.phuuun.legato.library.Album
 import com.phuuun.legato.library.Artist
 import com.phuuun.legato.library.Track
@@ -36,7 +36,7 @@ fun Back(onBack: () -> Unit) =
 
 @Composable
 fun AlbumScreen(album: Album?, onBack: () -> Unit, onPlay: (List<Track>, Int) -> Unit, actions: TrackActions, header: @Composable () -> Unit = {}) {
-    Column(Modifier.fillMaxSize().systemBarsPadding()) {
+    Column(Modifier.screen()) {
         Back(onBack)
         if (album == null) { Empty("Album not found", "It may have been deleted."); return }
         LazyColumn(Modifier.fillMaxSize()) {
@@ -55,7 +55,7 @@ fun AlbumScreen(album: Album?, onBack: () -> Unit, onPlay: (List<Track>, Int) ->
 
 @Composable
 fun ArtistScreen(artist: Artist?, onBack: () -> Unit, onAlbum: (Long) -> Unit, actions: TrackActions) {
-    Column(Modifier.fillMaxSize().systemBarsPadding()) {
+    Column(Modifier.screen()) {
         Back(onBack)
         if (artist == null) { Empty("Artist not found", "It may have been deleted."); return }
         Text(artist.name, style = MaterialTheme.typography.headlineLarge, modifier = Modifier.padding(horizontal = 20.dp))

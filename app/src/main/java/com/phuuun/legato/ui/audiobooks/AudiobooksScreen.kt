@@ -10,7 +10,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
@@ -22,6 +21,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.dp
+import com.phuuun.legato.ui.components.screen
 import com.phuuun.legato.library.Book
 import com.phuuun.legato.library.Spot
 import com.phuuun.legato.library.asAlbum
@@ -34,7 +34,7 @@ import com.phuuun.legato.ui.library.TrackActions
 
 @Composable
 fun AudiobooksScreen(books: List<Book>, spots: Map<Long, Spot>, hasFolders: Boolean, onBook: (Book) -> Unit, actions: TrackActions, onSettings: () -> Unit) {
-    Column(Modifier.fillMaxSize().systemBarsPadding()) {
+    Column(Modifier.screen()) {
         LegatoHeader(onSettings)
         when {
             !hasFolders -> Empty("No audiobooks", "Add an audiobook folder in Settings")
