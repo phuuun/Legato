@@ -9,7 +9,10 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
 
-enum class FolderKind(val key: String) { Music("music_folders"), Audiobooks("audiobook_folders") }
+enum class FolderKind(val key: String, val lastKey: String) {
+    Music("music_folders", "last_music_folder"),
+    Audiobooks("audiobook_folders", "last_audiobook_folder"),
+}
 
 /** What a scope shows before any folder is chosen: music falls back to everything, audiobooks to nothing. */
 enum class WhenEmpty { AllMusic, Nothing }
@@ -31,6 +34,11 @@ class FolderStore(context: Context) {
     fun add(kind: FolderKind, path: String) = prefs.edit { putStringSet(kind.key, read(kind) + path) }
 
     fun remove(kind: FolderKind, path: String) = prefs.edit { putStringSet(kind.key, read(kind) - path) }
+
+    /** The folder the converter last saved this kind into. */
+    fun lastFolder(kind: FolderKind): String? = prefs.getString(kind.lastKey, null)
+
+    fun setLastFolder(kind: FolderKind, path: String) = prefs.edit { putString(kind.lastKey, path) }
 }
 
 /** "primary:Download/MUSIC" from the folder picker → "Download/MUSIC/". Storage roots and SD cards → null. */

@@ -20,21 +20,31 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.phuuun.legato.library.relativePathFromTreeDocId
 
+/** Android's folder picker, giving a relative path ("Download/MUSIC/"); a folder off internal storage gets a toast instead. */
+@Composable
+fun rememberFolderPicker(onPicked: (String) -> Unit): () -> Unit {
+    val context = LocalContext.current
+    val latest by rememberUpdatedState(onPicked)
+    val launcher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { tree ->
+        if (tree == null) return@rememberLauncherForActivityResult
+        val path = relativePathFromTreeDocId(DocumentsContract.getTreeDocumentId(tree))
+        if (path == null) Toast.makeText(context, "Only internal storage for now", Toast.LENGTH_SHORT).show() else latest(path)
+    }
+    return { launcher.launch(null) }
+}
+
 /** A section's folders: each with a ✕, then "Add folder" through Android's folder picker. */
 @Composable
 fun FoldersPane(folders: Set<String>, hint: String?, onAdd: (String) -> Unit, onRemove: (String) -> Unit, footer: @Composable () -> Unit = {}) {
-    val context = LocalContext.current
-    val pick = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { tree ->
-        if (tree == null) return@rememberLauncherForActivityResult
-        val path = relativePathFromTreeDocId(DocumentsContract.getTreeDocumentId(tree))
-        if (path == null) Toast.makeText(context, "Only internal storage for now", Toast.LENGTH_SHORT).show() else onAdd(path)
-    }
+    val pick = rememberFolderPicker(onAdd)
     LazyColumn(Modifier.fillMaxSize()) {
         item {
             Text("FOLDERS", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(start = 16.dp, top = 12.dp, bottom = 4.dp))
@@ -47,7 +57,7 @@ fun FoldersPane(folders: Set<String>, hint: String?, onAdd: (String) -> Unit, on
         }
         item {
             Row(
-                Modifier.fillMaxWidth().clickable { pick.launch(null) }.padding(horizontal = 16.dp, vertical = 12.dp),
+                Modifier.fillMaxWidth().clickable { pick() }.padding(horizontal = 16.dp, vertical = 12.dp),
                 verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 Icon(Icons.Rounded.Add, contentDescription = null)

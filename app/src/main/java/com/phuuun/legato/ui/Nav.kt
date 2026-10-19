@@ -48,6 +48,7 @@ import androidx.navigation.compose.navigation
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.phuuun.legato.library.FolderKind
+import com.phuuun.legato.converter.DownloadQueue
 import com.phuuun.legato.library.Book
 import com.phuuun.legato.library.FolderStore
 import com.phuuun.legato.library.ProgressStore
@@ -66,6 +67,7 @@ import com.phuuun.legato.playback.PlayerConnection
 import com.phuuun.legato.ui.audiobooks.AudiobooksScreen
 import com.phuuun.legato.ui.audiobooks.ResumeButton
 import com.phuuun.legato.ui.components.LegatoHeader
+import com.phuuun.legato.ui.converter.ConverterScreen
 import com.phuuun.legato.ui.edit.BulkFixScreen
 import com.phuuun.legato.ui.edit.EditScreen
 import com.phuuun.legato.ui.components.MiniPlayer
@@ -92,7 +94,7 @@ private enum class Section(val route: String, val label: String, val icon: Image
 }
 
 @Composable
-fun LegatoNav(library: LibraryRepository, audiobooks: LibraryRepository, player: PlayerConnection, playlistRepo: PlaylistRepository, folders: FolderStore, tagWriter: TagWriter, progress: ProgressStore) {
+fun LegatoNav(library: LibraryRepository, audiobooks: LibraryRepository, player: PlayerConnection, playlistRepo: PlaylistRepository, folders: FolderStore, tagWriter: TagWriter, progress: ProgressStore, downloads: DownloadQueue) {
     val nav = rememberNavController()
     // One view model for every destination, so the loaded library and the search box survive navigation.
     val vm: LibraryViewModel = viewModel(factory = viewModelFactory { initializer { LibraryViewModel(library) } })
@@ -172,7 +174,7 @@ fun LegatoNav(library: LibraryRepository, audiobooks: LibraryRepository, player:
                     }
                 }
             }
-            composable(Section.Converter.route) { ComingSoon("Converter", "Paste a YouTube link and save the audio to this phone.", onSettings) }
+            composable(Section.Converter.route) { ConverterScreen(null, folders, downloads, onSettings) }
             composable("edit/{id}", listOf(navArgument("id") { type = NavType.LongType })) { e ->
                 val id = e.arguments?.getLong("id")
                 val book = books.firstOrNull { b -> b.chapters.any { it.id == id } }
@@ -243,13 +245,5 @@ fun LegatoNav(library: LibraryRepository, audiobooks: LibraryRepository, player:
             onCreate = { name -> scope.launch { playlistRepo.addTracks(playlistRepo.create(name), ids) }; toast("Added to $name") },
             onDismiss = { adding = null },
         )
-    }
-}
-
-@Composable
-private fun ComingSoon(title: String, body: String, onSettings: () -> Unit) {
-    Column(Modifier.fillMaxSize().systemBarsPadding()) {
-        LegatoHeader(onSettings)
-        Empty(title, body)
     }
 }
