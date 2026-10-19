@@ -21,8 +21,7 @@ class MainActivity : ComponentActivity() {
             LegatoTheme {
                 Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
                     PermissionGate {
-                        // Playback arrives in the next task; tapping a song does nothing yet.
-                        LegatoNav(app.library, onPlay = { _, _ -> })
+                        LegatoNav(app.library, onPlay = app.player::play)
                     }
                 }
             }
