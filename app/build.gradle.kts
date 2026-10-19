@@ -10,7 +10,7 @@ android {
 
     defaultConfig {
         applicationId = "com.phuuun.legato"
-        minSdk = 24
+        minSdk = 30
         targetSdk = 37
         versionCode = 1
         versionName = "1.0"
