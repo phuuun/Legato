@@ -7,15 +7,9 @@ data class Book(val title: String, val author: String, val artUri: Uri?, val cha
     val id: Long get() = chapters.first().id
 }
 
-/**
- * Files group into a book by their album tag (the book title). An untagged file gets MediaStore's
- * fallback album, its folder's name, so that, like "Unknown album", means "no book title": the file is its own book.
- */
+/** Files group into a book by their album tag (the book title); a file without one is its own book. */
 fun groupBooks(tracks: List<Track>): List<Book> =
-    tracks.groupBy { t ->
-        val folder = t.relativePath.trimEnd('/').substringAfterLast('/')
-        if (t.album == "Unknown album" || t.album == folder) "#${t.id}" else t.album
-    }.map { (key, group) ->
+    tracks.groupBy { t -> t.albumTag.ifEmpty { "#${t.id}" } }.map { (key, group) ->
         val chapters = group.sortedWith(compareBy({ it.trackNumber }, { it.title.lowercase() }))
         Book(if (key.startsWith("#")) chapters.first().title else key, chapters.first().artist, chapters.first().artUri, chapters)
     }.sortedBy { it.title.lowercase() }

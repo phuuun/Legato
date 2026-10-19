@@ -28,6 +28,7 @@ data class NowPlayingState(
     val isPlaying: Boolean,
     val shuffle: Boolean,
     val repeatMode: Int,
+    val trackId: Long?,
 )
 
 /** Null state means nothing is queued, so the mini player hides. */
@@ -53,6 +54,7 @@ class NowPlayingViewModel(val controller: StateFlow<MediaController?>) : ViewMod
         return NowPlayingState(
             m.title?.toString().orEmpty(), m.artist?.toString().orEmpty(), m.artworkUri,
             currentPosition, duration, !Util.shouldShowPlayButton(this), shuffleModeEnabled, repeatMode,
+            currentMediaItem?.mediaId?.toLongOrNull(),
         )
     }
 

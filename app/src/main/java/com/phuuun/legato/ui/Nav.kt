@@ -48,6 +48,7 @@ import androidx.navigation.navArgument
 import com.phuuun.legato.library.FolderKind
 import com.phuuun.legato.library.FolderStore
 import com.phuuun.legato.library.asAlbum
+import com.phuuun.legato.library.edit.TagWriter
 import com.phuuun.legato.library.groupBooks
 import com.phuuun.legato.library.LibraryRepository
 import com.phuuun.legato.library.PlaylistRepository
@@ -55,6 +56,7 @@ import com.phuuun.legato.library.Track
 import com.phuuun.legato.playback.PlayerConnection
 import com.phuuun.legato.ui.audiobooks.AudiobooksScreen
 import com.phuuun.legato.ui.components.LegatoHeader
+import com.phuuun.legato.ui.edit.EditScreen
 import com.phuuun.legato.ui.components.MiniPlayer
 import com.phuuun.legato.ui.library.AlbumScreen
 import com.phuuun.legato.ui.library.ArtistScreen
@@ -79,7 +81,7 @@ private enum class Section(val route: String, val label: String, val icon: Image
 }
 
 @Composable
-fun LegatoNav(library: LibraryRepository, audiobooks: LibraryRepository, player: PlayerConnection, playlistRepo: PlaylistRepository, folders: FolderStore) {
+fun LegatoNav(library: LibraryRepository, audiobooks: LibraryRepository, player: PlayerConnection, playlistRepo: PlaylistRepository, folders: FolderStore, tagWriter: TagWriter) {
     val nav = rememberNavController()
     // One view model for every destination, so the loaded library and the search box survive navigation.
     val vm: LibraryViewModel = viewModel(factory = viewModelFactory { initializer { LibraryViewModel(library) } })
@@ -104,6 +106,7 @@ fun LegatoNav(library: LibraryRepository, audiobooks: LibraryRepository, player:
         TrackActions(
             queue = { tracks, next -> player.queue(tracks, next); toast(if (next) "Playing next" else "Added to queue") },
             addToPlaylist = { adding = it },
+            edit = { nav.navigate("edit/${it.id}") },
         )
     }
 
@@ -152,6 +155,18 @@ fun LegatoNav(library: LibraryRepository, audiobooks: LibraryRepository, player:
                 }
             }
             composable(Section.Converter.route) { ComingSoon("Converter", "Paste a YouTube link and save the audio to this phone.", onSettings) }
+            composable("edit/{id}", listOf(navArgument("id") { type = NavType.LongType })) { e ->
+                val id = e.arguments?.getLong("id")
+                val book = books.firstOrNull { b -> b.chapters.any { it.id == id } }
+                val track = book?.chapters?.first { it.id == id } ?: state.tracks.firstOrNull { it.id == id }
+                EditScreen(
+                    track, if (book != null) FolderKind.Audiobooks else FolderKind.Music, book?.chapters?.size ?: 1, onBack = { nav.popBackStack() },
+                    onSave = { properties, cover ->
+                        // The Nav scope outlives this screen, so leaving mid-save doesn't cancel the write.
+                        scope.launch { if (track != null && tagWriter.write(track, properties, cover)) nav.popBackStack() else toast("Couldn't save ${track?.title}") }
+                    },
+                )
+            }
             composable("settings") {
                 SettingsScreen(onBack = { nav.popBackStack() }) { section ->
                     when (section) {
@@ -192,7 +207,7 @@ fun LegatoNav(library: LibraryRepository, audiobooks: LibraryRepository, player:
             }
         }
     }
-    now?.let { if (expanded) NowPlayingSheet(it, nowPlayingVm, onDismiss = { expanded = false }) }
+    now?.let { if (expanded) NowPlayingSheet(it, nowPlayingVm, onDismiss = { expanded = false }, onEdit = { id -> nav.navigate("edit/$id") }) }
     adding?.let { tracks ->
         val ids = tracks.map { it.id }
         AddToPlaylistSheet(

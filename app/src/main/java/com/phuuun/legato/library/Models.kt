@@ -21,6 +21,10 @@ data class Track(
     val artists: List<String> = emptyList(),
 )
 
+/** The album tag as the file has it: blank when MediaStore made one up ("Unknown album", or the folder's name for an untagged file). */
+val Track.albumTag: String
+    get() = album.takeUnless { it == "Unknown album" || it == relativePath.trimEnd('/').substringAfterLast('/') }.orEmpty()
+
 data class Album(val id: Long, val title: String, val artist: String, val artUri: Uri?, val tracks: List<Track>)
 
 data class Artist(val name: String, val albums: List<Album>)

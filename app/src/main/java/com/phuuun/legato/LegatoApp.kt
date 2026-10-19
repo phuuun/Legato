@@ -11,6 +11,7 @@ import com.phuuun.legato.library.MediaStoreLibrary
 import com.phuuun.legato.library.PlaylistRepository
 import com.phuuun.legato.library.WhenEmpty
 import com.phuuun.legato.library.db.LegatoDb
+import com.phuuun.legato.library.edit.TagWriter
 import com.phuuun.legato.playback.PlayerConnection
 import com.phuuun.legato.ui.components.AudioCoverFetcher
 import com.phuuun.legato.ui.components.AudioCoverKeyer
@@ -21,6 +22,7 @@ class LegatoApp : Application(), SingletonImageLoader.Factory {
     val library: LibraryRepository by lazy { MediaStoreLibrary(this, folders.folders(FolderKind.Music), WhenEmpty.AllMusic) }
     val audiobooks: LibraryRepository by lazy { MediaStoreLibrary(this, folders.folders(FolderKind.Audiobooks), WhenEmpty.Nothing) }
     val player by lazy { PlayerConnection(this) }
+    val tagWriter by lazy { TagWriter(this) }
 
     // Playlists resolve against all music, not the chosen folders: removing a folder must never prune a playlist.
     private val allMusic: LibraryRepository by lazy { MediaStoreLibrary(this, flowOf(emptySet()), WhenEmpty.AllMusic) }

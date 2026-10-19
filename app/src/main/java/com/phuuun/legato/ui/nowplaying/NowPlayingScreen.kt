@@ -17,6 +17,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.QueueMusic
+import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.KeyboardArrowDown
 import androidx.compose.material.icons.rounded.Pause
 import androidx.compose.material.icons.rounded.PlayArrow
@@ -53,7 +54,7 @@ import kotlinx.coroutines.launch
 /** Full-height sheet over everything; swipe down or the chevron drops back to the mini player. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun NowPlayingSheet(state: NowPlayingState, vm: NowPlayingViewModel, onDismiss: () -> Unit) {
+fun NowPlayingSheet(state: NowPlayingState, vm: NowPlayingViewModel, onDismiss: () -> Unit, onEdit: (Long) -> Unit) {
     val sheet = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val scope = rememberCoroutineScope()
     var queueOpen by remember { mutableStateOf(false) }
@@ -70,8 +71,13 @@ fun NowPlayingSheet(state: NowPlayingState, vm: NowPlayingViewModel, onDismiss: 
                     Icon(Icons.Rounded.KeyboardArrowDown, contentDescription = "Close")
                 }
                 Text("NOW PLAYING", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.align(Alignment.Center))
-                IconButton(onClick = { queueOpen = true }, modifier = Modifier.align(Alignment.CenterEnd)) {
-                    Icon(Icons.AutoMirrored.Rounded.QueueMusic, contentDescription = "Queue")
+                Row(Modifier.align(Alignment.CenterEnd)) {
+                    state.trackId?.let { id ->
+                        IconButton(onClick = { scope.launch { sheet.hide() }.invokeOnCompletion { onDismiss(); onEdit(id) } }) {
+                            Icon(Icons.Rounded.Edit, contentDescription = "Edit info")
+                        }
+                    }
+                    IconButton(onClick = { queueOpen = true }) { Icon(Icons.AutoMirrored.Rounded.QueueMusic, contentDescription = "Queue") }
                 }
             }
             Spacer(Modifier.weight(1f))
