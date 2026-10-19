@@ -49,6 +49,7 @@ import com.phuuun.legato.library.LibraryRepository
 import com.phuuun.legato.library.PlaylistRepository
 import com.phuuun.legato.library.Track
 import com.phuuun.legato.playback.PlayerConnection
+import com.phuuun.legato.ui.components.LegatoHeader
 import com.phuuun.legato.ui.components.MiniPlayer
 import com.phuuun.legato.ui.library.AlbumScreen
 import com.phuuun.legato.ui.library.ArtistScreen
@@ -61,6 +62,8 @@ import com.phuuun.legato.ui.nowplaying.NowPlayingViewModel
 import com.phuuun.legato.ui.playlists.AddToPlaylistSheet
 import com.phuuun.legato.ui.playlists.PlaylistScreen
 import com.phuuun.legato.ui.playlists.PlaylistsList
+import com.phuuun.legato.ui.settings.SettingsScreen
+import com.phuuun.legato.ui.settings.SettingsSection
 import kotlinx.coroutines.launch
 
 private enum class Section(val route: String, val label: String, val icon: ImageVector) {
@@ -87,6 +90,7 @@ fun LegatoNav(library: LibraryRepository, player: PlayerConnection, playlistRepo
     val playlists by playlistRepo.playlists.collectAsState(emptyList())
     var adding by remember { mutableStateOf<List<Track>?>(null) }
     val toast = { text: String -> Toast.makeText(context, text, Toast.LENGTH_SHORT).show() }
+    val onSettings = { nav.navigate("settings") { launchSingleTop = true } }
     val actions = remember {
         TrackActions(
             queue = { tracks, next -> player.queue(tracks, next); toast(if (next) "Playing next" else "Added to queue") },
@@ -100,9 +104,10 @@ fun LegatoNav(library: LibraryRepository, player: PlayerConnection, playlistRepo
             // Album and artist pages live inside the Music section, so its tab stays lit and keeps its back stack.
             navigation(startDestination = "library", route = Section.Music.route) {
                 composable("library") {
-                    LibraryScreen(state, vm::setQuery, onPlay, onAlbum = { nav.navigate("album/$it") }, onArtist = { nav.navigate("artist/${Uri.encode(it)}") }, actions = actions) {
-                        PlaylistsList(playlists, onOpen = { nav.navigate("playlist/$it") }, onCreate = { scope.launch { playlistRepo.create(it) } })
-                    }
+                    LibraryScreen(state, vm::setQuery, onPlay, onAlbum = { nav.navigate("album/$it") }, onArtist = { nav.navigate("artist/${Uri.encode(it)}") }, actions = actions,
+                        playlistsTab = { PlaylistsList(playlists, onOpen = { nav.navigate("playlist/$it") }, onCreate = { scope.launch { playlistRepo.create(it) } }) },
+                        onSettings = onSettings,
+                    )
                 }
                 composable("album/{id}", listOf(navArgument("id") { type = NavType.LongType })) { e ->
                     val id = e.arguments?.getLong("id")
@@ -124,8 +129,16 @@ fun LegatoNav(library: LibraryRepository, player: PlayerConnection, playlistRepo
                     )
                 }
             }
-            composable(Section.Audiobooks.route) { ComingSoon("Audiobooks", "Your audiobooks will live here, with your place saved in each one.") }
-            composable(Section.Converter.route) { ComingSoon("Converter", "Paste a YouTube link and save the audio to this phone.") }
+            composable(Section.Audiobooks.route) { ComingSoon("Audiobooks", "Your audiobooks will live here, with your place saved in each one.", onSettings) }
+            composable(Section.Converter.route) { ComingSoon("Converter", "Paste a YouTube link and save the audio to this phone.", onSettings) }
+            composable("settings") {
+                SettingsScreen(onBack = { nav.popBackStack() }) { section ->
+                    when (section) {
+                        SettingsSection.Converter -> Text("Comes with the converter.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(20.dp))
+                        else -> Unit
+                    }
+                }
+            }
         }
         now?.let { MiniPlayer(it, nowPlayingVm::togglePlay, onOpen = { expanded = true }) }
         HorizontalDivider(thickness = 0.5.dp, color = MaterialTheme.colorScheme.outline)
@@ -164,10 +177,9 @@ fun LegatoNav(library: LibraryRepository, player: PlayerConnection, playlistRepo
 }
 
 @Composable
-private fun ComingSoon(title: String, body: String) {
+private fun ComingSoon(title: String, body: String, onSettings: () -> Unit) {
     Column(Modifier.fillMaxSize().systemBarsPadding()) {
-        Text("LEGATO", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(start = 20.dp, top = 12.dp))
-        Text(title, style = MaterialTheme.typography.headlineLarge, modifier = Modifier.padding(horizontal = 20.dp))
-        Empty("Coming soon", body)
+        LegatoHeader(onSettings)
+        Empty(title, body)
     }
 }

@@ -30,6 +30,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.phuuun.legato.library.Track
+import com.phuuun.legato.ui.components.LegatoHeader
 
 private enum class Tab(val label: String) { Songs("SONGS"), Albums("ALBUMS"), Artists("ARTISTS"), Playlists("PLAYLISTS") }
 
@@ -42,11 +43,11 @@ fun LibraryScreen(
     onArtist: (String) -> Unit,
     actions: TrackActions,
     playlistsTab: @Composable () -> Unit,
+    onSettings: () -> Unit,
 ) {
     var tab by rememberSaveable { mutableStateOf(Tab.Songs) }
     Column(Modifier.fillMaxSize().systemBarsPadding()) {
-        Text("LEGATO", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(start = 20.dp, top = 12.dp))
-        Text("Library", style = MaterialTheme.typography.headlineLarge, modifier = Modifier.padding(horizontal = 20.dp))
+        LegatoHeader(onSettings)
         TextField(
             value = state.query, onValueChange = onQuery, singleLine = true,
             placeholder = { Text("Search") },
