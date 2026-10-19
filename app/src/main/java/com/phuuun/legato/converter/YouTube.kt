@@ -1,0 +1,72 @@
+package com.phuuun.legato.converter
+
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import org.schabi.newpipe.extractor.MediaFormat
+import org.schabi.newpipe.extractor.NewPipe
+import org.schabi.newpipe.extractor.ServiceList
+import org.schabi.newpipe.extractor.downloader.Downloader
+import org.schabi.newpipe.extractor.downloader.Request
+import org.schabi.newpipe.extractor.downloader.Response
+import org.schabi.newpipe.extractor.playlist.PlaylistInfo
+import org.schabi.newpipe.extractor.stream.StreamInfo
+import java.net.HttpURLConnection
+import java.net.URI
+
+data class AudioOption(val url: String, val isM4a: Boolean, val bitrate: Int)
+
+/** M4A only (AAC, plays and tags everywhere); the highest bitrate YouTube offers, usually 128 kbps. */
+fun bestAudio(options: List<AudioOption>): AudioOption? = options.filter { it.isM4a }.maxByOrNull { it.bitrate }
+
+data class Video(val url: String, val title: String, val uploader: String, val durationSec: Long, val thumbnail: String?)
+
+data class Playlist(val name: String, val videos: List<Video>)
+
+/** YouTube through NewPipeExtractor, the engine save4k and NewPipe use. Every call is network work on the IO pool. */
+object YouTube {
+    private val started: Unit by lazy { NewPipe.init(HttpDownloader) }
+
+    suspend fun video(url: String): Video = withContext(Dispatchers.IO) {
+        started
+        val info = StreamInfo.getInfo(ServiceList.YouTube, url)
+        Video(url, info.name, info.uploaderName.orEmpty(), info.duration, info.thumbnails.maxByOrNull { it.height }?.url)
+    }
+
+    /** Every video in the playlist, following YouTube's pages to the end. */
+    suspend fun playlist(url: String): Playlist = withContext(Dispatchers.IO) {
+        started
+        val info = PlaylistInfo.getInfo(ServiceList.YouTube, url)
+        val items = info.relatedItems.toMutableList()
+        var page = info.nextPage
+        while (page != null) {
+            val more = PlaylistInfo.getMoreItems(ServiceList.YouTube, url, page)
+            items += more.items
+            page = more.nextPage
+        }
+        Playlist(info.name, items.map { Video(it.url, it.name, it.uploaderName.orEmpty(), it.duration, it.thumbnails.maxByOrNull { t -> t.height }?.url) })
+    }
+
+    /** A fresh stream link: they expire within hours and are tied to this phone's IP, so fetch one right before downloading. */
+    suspend fun audioUrl(videoUrl: String): String = withContext(Dispatchers.IO) {
+        started
+        val info = StreamInfo.getInfo(ServiceList.YouTube, videoUrl)
+        bestAudio(info.audioStreams.map { AudioOption(it.content, it.format == MediaFormat.M4A, it.averageBitrate) })?.url
+            ?: error("No M4A audio for this video")
+    }
+}
+
+/** NewPipe's network hook, on plain HttpURLConnection; a desktop browser's User-Agent gets the regular web pages. */
+private object HttpDownloader : Downloader() {
+    override fun execute(request: Request): Response {
+        val c = URI(request.url()).toURL().openConnection() as HttpURLConnection
+        c.requestMethod = request.httpMethod()
+        c.connectTimeout = 15_000
+        c.readTimeout = 30_000
+        c.setRequestProperty("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:128.0) Gecko/20100101 Firefox/128.0")
+        request.headers().forEach { (k, vs) -> vs.forEach { c.addRequestProperty(k, it) } }
+        request.dataToSend()?.let { data -> c.doOutput = true; c.outputStream.use { it.write(data) } }
+        val code = c.responseCode
+        val body = (if (code >= 400) c.errorStream else c.inputStream)?.use { String(it.readBytes()) }.orEmpty()
+        return Response(code, c.responseMessage, c.headerFields.filterKeys { it != null }, body, c.url.toString())
+    }
+}
