@@ -1,6 +1,7 @@
 package com.phuuun.legato.ui
 
 import android.net.Uri
+import android.widget.Toast
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.consumeWindowInsets
@@ -28,6 +29,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.initializer
@@ -71,6 +73,11 @@ fun LegatoNav(library: LibraryRepository, player: PlayerConnection) {
     var expanded by rememberSaveable { mutableStateOf(false) }
     // Like YT Music: picking a song opens the full player; swiping it down leaves the mini player.
     val onPlay: (List<Track>, Int) -> Unit = { tracks, i -> player.play(tracks, i); expanded = true }
+    val context = LocalContext.current
+    val onQueue: (List<Track>, Boolean) -> Unit = { tracks, next ->
+        player.queue(tracks, next)
+        Toast.makeText(context, if (next) "Playing next" else "Added to queue", Toast.LENGTH_SHORT).show()
+    }
 
     Column(Modifier.fillMaxSize()) {
         // The bar below owns the navigation-bar inset; screens keep systemBarsPadding for the status bar.
@@ -78,15 +85,15 @@ fun LegatoNav(library: LibraryRepository, player: PlayerConnection) {
             // Album and artist pages live inside the Music section, so its tab stays lit and keeps its back stack.
             navigation(startDestination = "library", route = Section.Music.route) {
                 composable("library") {
-                    LibraryScreen(state, vm::setQuery, onPlay, onAlbum = { nav.navigate("album/$it") }, onArtist = { nav.navigate("artist/${Uri.encode(it)}") })
+                    LibraryScreen(state, vm::setQuery, onPlay, onAlbum = { nav.navigate("album/$it") }, onArtist = { nav.navigate("artist/${Uri.encode(it)}") }, onQueue = onQueue)
                 }
                 composable("album/{id}", listOf(navArgument("id") { type = NavType.LongType })) { e ->
                     val id = e.arguments?.getLong("id")
-                    AlbumScreen(state.albums.firstOrNull { it.id == id }, onBack = { nav.popBackStack() }, onPlay = onPlay)
+                    AlbumScreen(state.albums.firstOrNull { it.id == id }, onBack = { nav.popBackStack() }, onPlay = onPlay, onQueue = onQueue)
                 }
                 composable("artist/{name}", listOf(navArgument("name") { type = NavType.StringType })) { e ->
                     val name = e.arguments?.getString("name")
-                    ArtistScreen(state.artists.firstOrNull { it.name == name }, onBack = { nav.popBackStack() }, onAlbum = { nav.navigate("album/$it") })
+                    ArtistScreen(state.artists.firstOrNull { it.name == name }, onBack = { nav.popBackStack() }, onAlbum = { nav.navigate("album/$it") }, onQueue = onQueue)
                 }
             }
             composable(Section.Audiobooks.route) { ComingSoon("Audiobooks", "Your audiobooks will live here, with your place saved in each one.") }

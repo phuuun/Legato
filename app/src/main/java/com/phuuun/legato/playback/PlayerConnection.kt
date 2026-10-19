@@ -26,4 +26,10 @@ class PlayerConnection(context: Context) {
         c.prepare()
         c.play()
     }
+
+    fun queue(tracks: List<Track>, next: Boolean) {
+        val c = controller.value ?: return
+        val items = tracks.map { it.toMediaItem() }
+        if (next) c.playNext(items) else c.enqueue(items)
+    }
 }

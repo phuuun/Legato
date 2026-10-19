@@ -35,7 +35,7 @@ private fun Back(onBack: () -> Unit) =
     IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back") }
 
 @Composable
-fun AlbumScreen(album: Album?, onBack: () -> Unit, onPlay: (List<Track>, Int) -> Unit) {
+fun AlbumScreen(album: Album?, onBack: () -> Unit, onPlay: (List<Track>, Int) -> Unit, onQueue: (List<Track>, next: Boolean) -> Unit) {
     Column(Modifier.fillMaxSize().systemBarsPadding()) {
         Back(onBack)
         if (album == null) { Empty("Album not found", "It may have been deleted."); return }
@@ -47,13 +47,13 @@ fun AlbumScreen(album: Album?, onBack: () -> Unit, onPlay: (List<Track>, Int) ->
                     Text(album.artist, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
-            items(album.tracks, key = { it.id }) { t -> SongRow(t, onClick = { onPlay(album.tracks, album.tracks.indexOf(t)) }) }
+            items(album.tracks, key = { it.id }) { t -> SongRow(t, onClick = { onPlay(album.tracks, album.tracks.indexOf(t)) }, onQueue = { onQueue(listOf(t), it) }) }
         }
     }
 }
 
 @Composable
-fun ArtistScreen(artist: Artist?, onBack: () -> Unit, onAlbum: (Long) -> Unit) {
+fun ArtistScreen(artist: Artist?, onBack: () -> Unit, onAlbum: (Long) -> Unit, onQueue: (List<Track>, next: Boolean) -> Unit) {
     Column(Modifier.fillMaxSize().systemBarsPadding()) {
         Back(onBack)
         if (artist == null) { Empty("Artist not found", "It may have been deleted."); return }
@@ -61,6 +61,6 @@ fun ArtistScreen(artist: Artist?, onBack: () -> Unit, onAlbum: (Long) -> Unit) {
         LazyVerticalGrid(
             GridCells.Fixed(2), Modifier.fillMaxSize(), contentPadding = PaddingValues(20.dp),
             horizontalArrangement = Arrangement.spacedBy(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) { items(artist.albums, key = { it.id }) { a -> AlbumCard(a, onClick = { onAlbum(a.id) }) } }
+        ) { items(artist.albums, key = { it.id }) { a -> AlbumCard(a, onClick = { onAlbum(a.id) }, onQueue = { onQueue(a.tracks, it) }) } }
     }
 }

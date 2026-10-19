@@ -32,7 +32,7 @@ data class NowPlayingState(
 
 /** Null state means nothing is queued, so the mini player hides. */
 @OptIn(UnstableApi::class)
-class NowPlayingViewModel(private val controller: StateFlow<MediaController?>) : ViewModel() {
+class NowPlayingViewModel(val controller: StateFlow<MediaController?>) : ViewModel() {
 
     @kotlin.OptIn(ExperimentalCoroutinesApi::class)
     val state: StateFlow<NowPlayingState?> = controller.filterNotNull().flatMapLatest { c ->

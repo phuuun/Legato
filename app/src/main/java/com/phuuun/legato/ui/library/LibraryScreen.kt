@@ -40,6 +40,7 @@ fun LibraryScreen(
     onPlay: (List<Track>, Int) -> Unit,
     onAlbum: (Long) -> Unit,
     onArtist: (String) -> Unit,
+    onQueue: (List<Track>, next: Boolean) -> Unit,
 ) {
     var tab by rememberSaveable { mutableStateOf(Tab.Songs) }
     Column(Modifier.fillMaxSize().systemBarsPadding()) {
@@ -70,27 +71,27 @@ fun LibraryScreen(
         when {
             !state.loaded -> Unit
             state.tracks.isEmpty() -> Empty("No music found", "Add some files to this phone and they'll show up here.")
-            state.query.isNotBlank() -> SearchBody(state.results, onPlay, onAlbum, onArtist)
+            state.query.isNotBlank() -> SearchBody(state.results, onPlay, onAlbum, onArtist, onQueue)
             tab == Tab.Songs -> LazyColumn(Modifier.fillMaxSize()) {
-                items(state.tracks, key = { it.id }) { t -> SongRow(t, onClick = { onPlay(state.tracks, state.tracks.indexOf(t)) }) }
+                items(state.tracks, key = { it.id }) { t -> SongRow(t, onClick = { onPlay(state.tracks, state.tracks.indexOf(t)) }, onQueue = { onQueue(listOf(t), it) }) }
             }
             tab == Tab.Albums -> LazyVerticalGrid(
                 GridCells.Fixed(2), Modifier.fillMaxSize(), contentPadding = PaddingValues(20.dp),
                 horizontalArrangement = Arrangement.spacedBy(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp),
-            ) { items(state.albums, key = { it.id }) { a -> AlbumCard(a, onClick = { onAlbum(a.id) }) } }
+            ) { items(state.albums, key = { it.id }) { a -> AlbumCard(a, onClick = { onAlbum(a.id) }, onQueue = { onQueue(a.tracks, it) }) } }
             else -> LazyColumn(Modifier.fillMaxSize()) { items(state.artists, key = { it.name }) { a -> ArtistRow(a, onClick = { onArtist(a.name) }) } }
         }
     }
 }
 
 @Composable
-private fun SearchBody(r: SearchResults, onPlay: (List<Track>, Int) -> Unit, onAlbum: (Long) -> Unit, onArtist: (String) -> Unit) {
+private fun SearchBody(r: SearchResults, onPlay: (List<Track>, Int) -> Unit, onAlbum: (Long) -> Unit, onArtist: (String) -> Unit, onQueue: (List<Track>, Boolean) -> Unit) {
     if (r.tracks.isEmpty() && r.albums.isEmpty() && r.artists.isEmpty()) { Empty("Nothing found", "Try another spelling."); return }
     LazyColumn(Modifier.fillMaxSize()) {
         if (r.artists.isNotEmpty()) { item { Eyebrow("ARTISTS") }; items(r.artists, key = { "ar" + it.name }) { a -> ArtistRow(a, onClick = { onArtist(a.name) }) } }
         if (r.albums.isNotEmpty()) { item { Eyebrow("ALBUMS") }; items(r.albums, key = { "al" + it.id }) { a ->
             SongRowLike(a.title, a.artist) { onAlbum(a.id) } } }
-        if (r.tracks.isNotEmpty()) { item { Eyebrow("SONGS") }; items(r.tracks, key = { "t" + it.id }) { t -> SongRow(t, onClick = { onPlay(r.tracks, r.tracks.indexOf(t)) }) } }
+        if (r.tracks.isNotEmpty()) { item { Eyebrow("SONGS") }; items(r.tracks, key = { "t" + it.id }) { t -> SongRow(t, onClick = { onPlay(r.tracks, r.tracks.indexOf(t)) }, onQueue = { onQueue(listOf(t), it) }) } }
     }
 }
 
