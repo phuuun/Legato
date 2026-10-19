@@ -23,6 +23,7 @@ import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -94,7 +95,9 @@ private enum class Section(val route: String, val label: String, val icon: Image
 }
 
 @Composable
-fun LegatoNav(library: LibraryRepository, audiobooks: LibraryRepository, player: PlayerConnection, playlistRepo: PlaylistRepository, folders: FolderStore, tagWriter: TagWriter, progress: ProgressStore, downloads: DownloadQueue) {
+fun LegatoNav(library: LibraryRepository, audiobooks: LibraryRepository, player: PlayerConnection, playlistRepo: PlaylistRepository, folders: FolderStore, tagWriter: TagWriter, progress: ProgressStore, downloads: DownloadQueue,
+    sharedLink: String?, onSharedLinkUsed: () -> Unit,
+) {
     val nav = rememberNavController()
     // One view model for every destination, so the loaded library and the search box survive navigation.
     val vm: LibraryViewModel = viewModel(factory = viewModelFactory { initializer { LibraryViewModel(library) } })
@@ -112,6 +115,15 @@ fun LegatoNav(library: LibraryRepository, audiobooks: LibraryRepository, player:
     var adding by remember { mutableStateOf<List<Track>?>(null) }
     val toast = { text: String -> Toast.makeText(context, text, Toast.LENGTH_SHORT).show() }
     val onSettings = { nav.navigate("settings") { launchSingleTop = true } }
+    val toSection = { route: String ->
+        nav.navigate(route) {
+            popUpTo(nav.graph.findStartDestination().id) { saveState = true }
+            launchSingleTop = true
+            restoreState = true
+        }
+    }
+    // A link shared to Legato jumps to the converter, which takes it from there.
+    LaunchedEffect(sharedLink) { if (sharedLink != null) toSection(Section.Converter.route) }
     val audiobookTracks by audiobooks.tracks.collectAsState(emptyList())
     val books = remember(audiobookTracks) { groupBooks(audiobookTracks) }
     val audiobookFolders by remember { folders.folders(FolderKind.Audiobooks) }.collectAsState(emptySet())
@@ -174,7 +186,7 @@ fun LegatoNav(library: LibraryRepository, audiobooks: LibraryRepository, player:
                     }
                 }
             }
-            composable(Section.Converter.route) { ConverterScreen(null, folders, downloads, onSettings) }
+            composable(Section.Converter.route) { ConverterScreen(sharedLink, onSharedLinkUsed, folders, downloads, onSettings) }
             composable("edit/{id}", listOf(navArgument("id") { type = NavType.LongType })) { e ->
                 val id = e.arguments?.getLong("id")
                 val book = books.firstOrNull { b -> b.chapters.any { it.id == id } }
@@ -207,7 +219,7 @@ fun LegatoNav(library: LibraryRepository, audiobooks: LibraryRepository, player:
                             val f by remember { folders.folders(FolderKind.Audiobooks) }.collectAsState(emptySet())
                             FoldersPane(f, null, { folders.add(FolderKind.Audiobooks, it) }, { folders.remove(FolderKind.Audiobooks, it) })
                         }
-                        SettingsSection.Converter -> Text("Comes with the converter.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(20.dp))
+                        SettingsSection.Converter -> Text("Downloads go to the folder you pick in the Converter. Add more folders under Music and Audiobooks.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(20.dp))
                     }
                 }
             }
@@ -218,13 +230,7 @@ fun LegatoNav(library: LibraryRepository, audiobooks: LibraryRepository, player:
             Section.entries.forEach { s ->
                 NavigationBarItem(
                     selected = current?.destination?.hierarchy?.any { it.route == s.route } == true,
-                    onClick = {
-                        nav.navigate(s.route) {
-                            popUpTo(nav.graph.findStartDestination().id) { saveState = true }
-                            launchSingleTop = true
-                            restoreState = true
-                        }
-                    },
+                    onClick = { toSection(s.route) },
                     icon = { Icon(s.icon, contentDescription = null) },
                     label = { Text(s.label, style = MaterialTheme.typography.labelSmall) },
                     colors = NavigationBarItemDefaults.colors(

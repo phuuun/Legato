@@ -101,7 +101,7 @@ private sealed interface Fetch {
 
 /** Link in, preview with guessed tags, pick where it goes, download; the queue below shows what's happening. */
 @Composable
-fun ConverterScreen(initialLink: String?, folders: FolderStore, downloads: DownloadQueue, onSettings: () -> Unit) {
+fun ConverterScreen(initialLink: String?, onInitialLinkUsed: () -> Unit, folders: FolderStore, downloads: DownloadQueue, onSettings: () -> Unit) {
     val context = LocalContext.current
     val clipboard = LocalClipboardManager.current
     val scope = rememberCoroutineScope()
@@ -131,7 +131,14 @@ fun ConverterScreen(initialLink: String?, folders: FolderStore, downloads: Downl
             else -> loadPlaylist(parsed.playlist!!)
         }
     }
-    LaunchedEffect(initialLink) { if (initialLink != null) { link = initialLink; load(initialLink) } }
+    LaunchedEffect(initialLink) {
+        if (initialLink != null) { link = initialLink; load(initialLink); onInitialLinkUsed() }
+    }
+    // Opening the tab with a YouTube link already copied offers it; the clipboard is only read here, never in the background.
+    var suggestion by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(Unit) {
+        if (initialLink == null && link.isBlank()) suggestion = clipboard.getText()?.text?.takeIf { parseYouTube(it) != null }
+    }
 
     fun queue(batch: List<DownloadJob>, kind: FolderKind) {
         if (batch.isEmpty()) return
@@ -158,10 +165,15 @@ fun ConverterScreen(initialLink: String?, folders: FolderStore, downloads: Downl
         }
         item {
             when (val f = fetch) {
-                Fetch.Idle -> Text(
-                    "Paste a YouTube link, or share one to Legato from the YouTube app.", style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(20.dp),
-                )
+                Fetch.Idle -> Column(Modifier.padding(20.dp)) {
+                    suggestion?.let { s ->
+                        TextButton(onClick = { link = s; suggestion = null; load(s) }) { Text("Paste $s", maxLines = 1, overflow = TextOverflow.Ellipsis) }
+                    }
+                    Text(
+                        "Paste a YouTube link, or share one to Legato from the YouTube app.", style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
                 Fetch.Loading -> Box(Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
                 is Fetch.Error -> Text(f.message, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(20.dp))
                 is Fetch.Ask -> Column(Modifier.padding(20.dp)) {
