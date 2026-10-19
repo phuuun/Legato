@@ -22,6 +22,9 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -40,11 +43,15 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.phuuun.legato.library.LibraryRepository
 import com.phuuun.legato.library.Track
+import com.phuuun.legato.playback.PlayerConnection
+import com.phuuun.legato.ui.components.MiniPlayer
 import com.phuuun.legato.ui.library.AlbumScreen
 import com.phuuun.legato.ui.library.ArtistScreen
 import com.phuuun.legato.ui.library.Empty
 import com.phuuun.legato.ui.library.LibraryScreen
 import com.phuuun.legato.ui.library.LibraryViewModel
+import com.phuuun.legato.ui.nowplaying.NowPlayingSheet
+import com.phuuun.legato.ui.nowplaying.NowPlayingViewModel
 
 private enum class Section(val route: String, val label: String, val icon: ImageVector) {
     Music("music", "MUSIC", Icons.Outlined.MusicNote),
@@ -53,12 +60,17 @@ private enum class Section(val route: String, val label: String, val icon: Image
 }
 
 @Composable
-fun LegatoNav(library: LibraryRepository, onPlay: (List<Track>, Int) -> Unit) {
+fun LegatoNav(library: LibraryRepository, player: PlayerConnection) {
     val nav = rememberNavController()
     // One view model for every destination, so the loaded library and the search box survive navigation.
     val vm: LibraryViewModel = viewModel(factory = viewModelFactory { initializer { LibraryViewModel(library) } })
     val state by vm.state.collectAsState()
     val current by nav.currentBackStackEntryAsState()
+    val nowPlayingVm: NowPlayingViewModel = viewModel(factory = viewModelFactory { initializer { NowPlayingViewModel(player.controller) } })
+    val now by nowPlayingVm.state.collectAsState()
+    var expanded by rememberSaveable { mutableStateOf(false) }
+    // Like YT Music: picking a song opens the full player; swiping it down leaves the mini player.
+    val onPlay: (List<Track>, Int) -> Unit = { tracks, i -> player.play(tracks, i); expanded = true }
 
     Column(Modifier.fillMaxSize()) {
         // The bar below owns the navigation-bar inset; screens keep systemBarsPadding for the status bar.
@@ -80,6 +92,7 @@ fun LegatoNav(library: LibraryRepository, onPlay: (List<Track>, Int) -> Unit) {
             composable(Section.Audiobooks.route) { ComingSoon("Audiobooks", "Your audiobooks will live here, with your place saved in each one.") }
             composable(Section.Converter.route) { ComingSoon("Converter", "Paste a YouTube link and save the audio to this phone.") }
         }
+        now?.let { MiniPlayer(it, nowPlayingVm::togglePlay, onOpen = { expanded = true }) }
         HorizontalDivider(thickness = 0.5.dp, color = MaterialTheme.colorScheme.outline)
         NavigationBar(containerColor = MaterialTheme.colorScheme.background, tonalElevation = 0.dp) {
             Section.entries.forEach { s ->
@@ -103,6 +116,7 @@ fun LegatoNav(library: LibraryRepository, onPlay: (List<Track>, Int) -> Unit) {
             }
         }
     }
+    now?.let { if (expanded) NowPlayingSheet(it, nowPlayingVm, onDismiss = { expanded = false }) }
 }
 
 @Composable
