@@ -14,6 +14,8 @@ android {
         targetSdk = 37
         versionCode = 1
         versionName = "1.0"
+        // TagLib is native; this phone is 64-bit ARM, and every other ABI is dead weight in the APK.
+        ndk { abiFilters += "arm64-v8a" }
     }
 
     buildTypes {
@@ -50,6 +52,7 @@ dependencies {
     implementation(libs.androidx.room.runtime)
     implementation(libs.androidx.room.ktx)
     ksp(libs.androidx.room.compiler)
+    implementation(libs.taglib)
     implementation(libs.coil.compose)
     implementation(libs.kotlinx.coroutines.android)
     debugImplementation(libs.androidx.compose.ui.tooling)

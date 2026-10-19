@@ -10,6 +10,7 @@ coil = "3.5.0"
 media3 = "1.11.1"
 room = "2.8.5"
 ksp = "2.3.12"
+taglib = "1.0.6"
 coroutines = "1.10.2"
 junit = "4.13.2"
 robolectric = "4.16.1"
@@ -33,6 +34,7 @@ androidx-media3-session = { group = "androidx.media3", name = "media3-session", 
 androidx-room-runtime = { group = "androidx.room", name = "room-runtime", version.ref = "room" }
 androidx-room-ktx = { group = "androidx.room", name = "room-ktx", version.ref = "room" }
 androidx-room-compiler = { group = "androidx.room", name = "room-compiler", version.ref = "room" }
+taglib = { group = "io.github.kyant0", name = "taglib", version.ref = "taglib" }
 kotlinx-coroutines-android = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-android", version.ref = "coroutines" }
 kotlinx-coroutines-test = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-test", version.ref = "coroutines" }
 junit = { group = "junit", name = "junit", version.ref = "junit" }
