@@ -93,6 +93,7 @@ import com.phuuun.legato.ui.playlists.AddToPlaylistSheet
 import com.phuuun.legato.ui.playlists.PlaylistScreen
 import com.phuuun.legato.ui.playlists.PlaylistsList
 import com.phuuun.legato.ui.settings.FoldersPane
+import com.phuuun.legato.ui.library.PlayShuffle
 import com.phuuun.legato.ui.settings.SettingsScreen
 import com.phuuun.legato.ui.settings.SettingsSection
 import kotlinx.coroutines.launch
@@ -187,11 +188,14 @@ fun LegatoNav(library: LibraryRepository, audiobooks: LibraryRepository, player:
                             }
                             composable("album/{id}", listOf(navArgument("id") { type = NavType.LongType })) { e ->
                                 val id = e.arguments?.getLong("id")
-                                AlbumScreen(state.albums.firstOrNull { it.id == id }, onBack = { musicNav.popBackStack() }, onPlay = onPlay, actions = actions)
+                                val album = state.albums.firstOrNull { it.id == id }
+                                AlbumScreen(album, onBack = { musicNav.popBackStack() }, onPlay = onPlay, actions = actions) {
+                                    if (album != null) PlayShuffle(album.tracks, onPlay, Modifier.padding(top = 12.dp))
+                                }
                             }
                             composable("artist/{name}", listOf(navArgument("name") { type = NavType.StringType })) { e ->
                                 val name = e.arguments?.getString("name")
-                                ArtistScreen(state.artists.firstOrNull { it.name == name }, onBack = { musicNav.popBackStack() }, onAlbum = { musicNav.navigate("album/$it") }, actions = actions)
+                                ArtistScreen(state.artists.firstOrNull { it.name == name }, onBack = { musicNav.popBackStack() }, onAlbum = { musicNav.navigate("album/$it") }, onPlay = onPlay, actions = actions)
                             }
                             composable("playlist/{id}", listOf(navArgument("id") { type = NavType.LongType })) { e ->
                                 val id = e.arguments?.getLong("id") ?: 0

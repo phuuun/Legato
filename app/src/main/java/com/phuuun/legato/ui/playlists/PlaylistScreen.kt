@@ -39,6 +39,7 @@ import com.phuuun.legato.ui.components.occurrenceKeys
 import com.phuuun.legato.ui.components.rememberReorder
 import com.phuuun.legato.ui.library.Back
 import com.phuuun.legato.ui.library.Empty
+import com.phuuun.legato.ui.library.PlayShuffle
 import com.phuuun.legato.ui.library.SongRow
 import com.phuuun.legato.ui.library.TrackActions
 
@@ -79,6 +80,7 @@ fun PlaylistScreen(
             "${tracks.size} ${if (tracks.size == 1) "song" else "songs"}", style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(start = 20.dp, bottom = 8.dp),
         )
+        PlayShuffle(tracks, onPlay, Modifier.padding(start = 20.dp, bottom = 8.dp))
         if (tracks.isEmpty()) Empty("No songs yet", "Long-press a song or an album and pick Add to playlist.")
         else LazyColumn(Modifier.fillMaxSize()) {
             val keys = occurrenceKeys(tracks) { it.id }
