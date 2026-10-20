@@ -1,5 +1,7 @@
 package com.phuuun.legato.playback
 
+import android.app.PendingIntent
+import android.content.Intent
 import android.widget.Toast
 import androidx.media3.common.MediaItem
 import androidx.media3.common.AudioAttributes
@@ -11,6 +13,7 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
 import com.phuuun.legato.LegatoApp
+import com.phuuun.legato.MainActivity
 import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
@@ -67,7 +70,9 @@ class PlaybackService : MediaSessionService() {
                 if (player.hasNextMediaItem()) { player.seekToNextMediaItem(); player.prepare() }
             }
         })
-        session = MediaSession.Builder(this, player).build()
+        // Without a session activity the notification has no tap target, and HyperOS opens some other media app instead.
+        val open = PendingIntent.getActivity(this, 0, Intent(this, MainActivity::class.java), PendingIntent.FLAG_IMMUTABLE)
+        session = MediaSession.Builder(this, player).setSessionActivity(open).build()
         // Audiobook spots also save every 10 s while playing, so a crash or a dead battery loses at most that.
         scope.launch {
             while (true) {
