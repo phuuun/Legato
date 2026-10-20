@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- A legato slur, white on black. Kept inside the 66dp safe zone so any launcher mask leaves it whole. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M24,59 C37,45 71,45 84,59 C71,51 37,51 24,59 Z" />
+</vector>
