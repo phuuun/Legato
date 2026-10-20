@@ -8,6 +8,7 @@ import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.common.util.Util
 import androidx.media3.session.MediaController
+import com.phuuun.legato.playback.SleepTimer
 import com.phuuun.legato.playback.coverUri
 import com.phuuun.legato.playback.isAudiobook
 import kotlinx.coroutines.Job
@@ -35,6 +36,7 @@ data class NowPlayingState(
     val repeatMode: Int,
     val trackId: Long?,
     val isAudiobook: Boolean,
+    val speed: Float,
 )
 
 /** Where a book was before a jump: the chapter's queue index and the spot in it. */
@@ -42,7 +44,7 @@ data class BackSpot(val index: Int, val positionMs: Long)
 
 /** Null state means nothing is queued, so the mini player hides. */
 @OptIn(UnstableApi::class)
-class NowPlayingViewModel(val controller: StateFlow<MediaController?>) : ViewModel() {
+class NowPlayingViewModel(val controller: StateFlow<MediaController?>, val sleep: SleepTimer) : ViewModel() {
 
     @kotlin.OptIn(ExperimentalCoroutinesApi::class)
     val state: StateFlow<NowPlayingState?> = controller.filterNotNull().flatMapLatest { c ->
@@ -64,7 +66,7 @@ class NowPlayingViewModel(val controller: StateFlow<MediaController?>) : ViewMod
         return NowPlayingState(
             m.title?.toString().orEmpty(), m.artist?.toString().orEmpty(), item.coverUri(),
             currentPosition, duration, !Util.shouldShowPlayButton(this), shuffleModeEnabled, repeatMode,
-            currentMediaItem?.mediaId?.toLongOrNull(), item.isAudiobook,
+            currentMediaItem?.mediaId?.toLongOrNull(), item.isAudiobook, playbackParameters.speed,
         )
     }
 
@@ -74,6 +76,18 @@ class NowPlayingViewModel(val controller: StateFlow<MediaController?>) : ViewMod
     fun togglePlay() { c?.let { Util.handlePlayPauseButtonAction(it) } }
     fun next() { c?.seekToNext() }
     fun previous() { c?.seekToPrevious() }
+    fun setSpeed(speed: Float) { c?.setPlaybackSpeed(speed) }
+
+    /** A swipe on the artwork or mini player: the next or previous track, or 10 s either way in a book. */
+    fun skip(forward: Boolean) {
+        val c = c ?: return
+        when {
+            c.currentMediaItem?.isAudiobook == true -> if (forward) skipForward() else skipBack()
+            forward -> c.seekToNextMediaItem()
+            else -> c.seekToPreviousMediaItem()
+        }
+    }
+
     fun seekTo(ms: Long) = jump { seekTo(ms) }
     fun skipBack() = jump { seekBack() }
     fun skipForward() = jump { seekForward() }

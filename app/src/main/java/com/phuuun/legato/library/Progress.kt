@@ -62,6 +62,11 @@ fun bookProgress(chapters: List<Track>, spots: Map<Long, Spot>): Pair<Long, Long
     return chapters.take(i).sumOf { it.durationMs } + spots.getValue(chapters[i].id).positionMs.coerceAtMost(chapters[i].durationMs) to total
 }
 
+/** The book listened to most recently and not yet finished: what "Continue listening" offers. */
+fun lastBook(books: List<Book>, spots: Map<Long, Spot>): Book? =
+    books.filter { b -> bookProgress(b.chapters, spots).let { (heard, total) -> heard > 0 && heard < total - 1_000 } }
+        .maxByOrNull { b -> b.chapters.maxOf { spots[it.id]?.updatedAt ?: 0 } }
+
 /** "7h 42m left"; a started minute counts as a whole one. */
 fun formatLeft(ms: Long): String {
     val minutes = ceil(ms / 60_000.0).toLong().coerceAtLeast(1)

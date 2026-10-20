@@ -29,6 +29,16 @@ class ProgressTest {
     fun finished_chapter_moves_to_the_next() = assertEquals(1 to 0L, resumePoint(book, mapOf(1L to Spot(10 * min, 100))))
 
     @Test
+    fun continue_listening_picks_the_latest_unfinished_book() {
+        val other = Book("Other", "A", null, listOf(trackFromRow(3, "Other", "A", "Other", 2, 10 * min, "3.mp3")))
+        val main = Book("Book", "Author", null, book)
+        // "Other" was heard more recently but is finished; nothing heard means nothing to offer.
+        val spots = mapOf(1L to Spot(min, 100), 3L to Spot(10 * min, 300))
+        assertEquals(main, lastBook(listOf(main, other), spots))
+        assertEquals(null, lastBook(listOf(main, other), emptyMap()))
+    }
+
+    @Test
     fun finished_book_starts_over() = assertEquals(0 to 0L, resumePoint(book, mapOf(2L to Spot(20 * min, 100))))
 
     @Test

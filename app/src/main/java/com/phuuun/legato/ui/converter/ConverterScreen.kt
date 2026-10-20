@@ -80,7 +80,6 @@ import com.phuuun.legato.converter.parseYouTube
 import com.phuuun.legato.converter.videoUrl
 import com.phuuun.legato.library.FolderKind
 import com.phuuun.legato.library.FolderStore
-import com.phuuun.legato.ui.components.LegatoHeader
 import com.phuuun.legato.ui.edit.Field
 import com.phuuun.legato.ui.nowplaying.formatTime
 import com.phuuun.legato.ui.settings.rememberFolderPicker
@@ -150,7 +149,7 @@ class ConverterState(private val scope: CoroutineScope) {
 
 /** Link in, preview with guessed tags, pick where it goes, download; the queue below shows what's happening. */
 @Composable
-fun ConverterScreen(state: ConverterState, initialLink: String?, onInitialLinkUsed: () -> Unit, folders: FolderStore, downloads: DownloadQueue, onSettings: () -> Unit) {
+fun ConverterScreen(state: ConverterState, initialLink: String?, onInitialLinkUsed: () -> Unit, folders: FolderStore, downloads: DownloadQueue) {
     val context = LocalContext.current
     val clipboard = LocalClipboardManager.current
     var link by state::link
@@ -181,8 +180,7 @@ fun ConverterScreen(state: ConverterState, initialLink: String?, onInitialLinkUs
         state.clear()
     }
 
-    LazyColumn(Modifier.screen()) {
-        item { LegatoHeader(onSettings) }
+    LazyColumn(Modifier.fillMaxSize()) {
         item {
             Row(Modifier.padding(horizontal = 20.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                 Box(Modifier.weight(1f)) {

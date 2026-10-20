@@ -16,14 +16,12 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.DragHandle
 import androidx.compose.material.icons.rounded.MoreVert
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -59,7 +57,6 @@ fun PlaylistScreen(
 ) {
     var menu by remember { mutableStateOf(false) }
     var renaming by remember { mutableStateOf(false) }
-    var deleting by remember { mutableStateOf(false) }
     val reorder = rememberReorder(RowHeight, onMove)
 
     Column(Modifier.screen()) {
@@ -70,7 +67,7 @@ fun PlaylistScreen(
                 IconButton(onClick = { menu = true }) { Icon(Icons.Rounded.MoreVert, contentDescription = "More") }
                 DropdownMenu(menu, { menu = false }) {
                     DropdownMenuItem(text = { Text("Rename") }, onClick = { menu = false; renaming = true })
-                    DropdownMenuItem(text = { Text("Delete") }, onClick = { menu = false; deleting = true })
+                    DropdownMenuItem(text = { Text("Delete") }, onClick = { menu = false; onDelete() })
                 }
             }
         }
@@ -98,11 +95,4 @@ fun PlaylistScreen(
     }
 
     if (renaming && playlist != null) NameDialog("Rename playlist", playlist.name, "Save", onDone = onRename, onDismiss = { renaming = false })
-    if (deleting && playlist != null) AlertDialog(
-        onDismissRequest = { deleting = false },
-        title = { Text("Delete “${playlist.name}”?") },
-        text = { Text("The songs stay on your phone.") },
-        confirmButton = { TextButton(onClick = { deleting = false; onDelete() }) { Text("Delete") } },
-        dismissButton = { TextButton(onClick = { deleting = false }) { Text("Cancel") } },
-    )
 }

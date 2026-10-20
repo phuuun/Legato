@@ -13,6 +13,7 @@ import kotlinx.coroutines.flow.StateFlow
 class PlayerConnection(context: Context) {
     private val _controller = MutableStateFlow<MediaController?>(null)
     val controller: StateFlow<MediaController?> = _controller
+    val sleep = SleepTimer(controller)
 
     init {
         val future = MediaController.Builder(context, SessionToken(context, ComponentName(context, PlaybackService::class.java))).buildAsync()

@@ -3,7 +3,9 @@ package com.phuuun.legato.playback
 import android.app.PendingIntent
 import android.content.Intent
 import android.widget.Toast
+import androidx.core.content.edit
 import androidx.media3.common.MediaItem
+import androidx.media3.common.PlaybackParameters
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.PlaybackException
@@ -19,6 +21,8 @@ import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+
+private const val BOOK_SPEED = "book_speed"
 
 /** The only owner of the player. The UI reaches it through a MediaController, so the queue lives here and nowhere else. */
 class PlaybackService : MediaSessionService() {
@@ -47,6 +51,12 @@ class PlaybackService : MediaSessionService() {
                 playing = item
                 // A book gets ±10 s in the notification and lock screen too; an empty list brings back previous/next.
                 session?.setMediaButtonPreferences(if (item?.isAudiobook == true) bookButtons else emptyList())
+                // Books play at the speed last picked for a book; music always at normal speed.
+                player.setPlaybackSpeed(if (item?.isAudiobook == true) prefs.getFloat(BOOK_SPEED, 1f) else 1f)
+            }
+
+            override fun onPlaybackParametersChanged(params: PlaybackParameters) {
+                if (player.currentMediaItem?.isAudiobook == true) prefs.edit { putFloat(BOOK_SPEED, params.speed) }
             }
 
             override fun onIsPlayingChanged(isPlaying: Boolean) {
@@ -76,7 +86,7 @@ class PlaybackService : MediaSessionService() {
             }
         })
         // Without a session activity the notification has no tap target, and HyperOS opens some other media app instead.
-        val open = PendingIntent.getActivity(this, 0, Intent(this, MainActivity::class.java), PendingIntent.FLAG_IMMUTABLE)
+        val open = PendingIntent.getActivity(this, 0, Intent(this, MainActivity::class.java).setAction(MainActivity.OPEN_PLAYER), PendingIntent.FLAG_IMMUTABLE)
         session = MediaSession.Builder(this, player).setSessionActivity(open).build()
         // Audiobook spots also save every 10 s while playing, so a crash or a dead battery loses at most that.
         scope.launch {
@@ -86,6 +96,8 @@ class PlaybackService : MediaSessionService() {
             }
         }
     }
+
+    private val prefs by lazy { getSharedPreferences("settings", MODE_PRIVATE) }
 
     private val bookButtons = listOf(
         CommandButton.Builder(CommandButton.ICON_SKIP_BACK_10).setDisplayName("Back 10 seconds")

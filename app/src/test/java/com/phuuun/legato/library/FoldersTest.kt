@@ -52,7 +52,7 @@ class FoldersTest {
     fun hidden_files_round_trip() = runTest {
         val store = FolderStore(ApplicationProvider.getApplicationContext())
         store.hide(listOf("/storage/emulated/0/Music/a.mp3", "/storage/emulated/0/Music/b.mp3"))
-        store.unhide("/storage/emulated/0/Music/a.mp3")
+        store.unhide(listOf("/storage/emulated/0/Music/a.mp3"))
         assertEquals(setOf("/storage/emulated/0/Music/b.mp3"), store.hidden.first())
     }
 

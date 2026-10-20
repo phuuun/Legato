@@ -1,6 +1,7 @@
 package com.phuuun.legato.ui.nowplaying
 
 import android.os.Build
+import android.os.SystemClock
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -23,6 +24,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.QueueMusic
 import androidx.compose.material.icons.automirrored.rounded.Undo
+import androidx.compose.material.icons.rounded.Bedtime
 import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.Forward10
 import androidx.compose.material.icons.rounded.KeyboardArrowDown
@@ -41,13 +43,17 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
@@ -59,7 +65,11 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.media3.common.Player
+import com.phuuun.legato.playback.SleepTimer
 import com.phuuun.legato.ui.components.Artwork
+import com.phuuun.legato.ui.components.swipeToSkip
+import kotlinx.coroutines.delay
+import kotlin.math.ceil
 import kotlinx.coroutines.launch
 
 /** Full-height sheet over everything; swipe down or the chevron drops back to the mini player. */
@@ -98,15 +108,17 @@ fun NowPlayingSheet(state: NowPlayingState, vm: NowPlayingViewModel, onDismiss: 
                     }
                 }
                 Spacer(Modifier.weight(1f))
-                Artwork(state.artUri, Modifier.fillMaxWidth().aspectRatio(1f).clip(RoundedCornerShape(12.dp)))
+                Artwork(state.artUri, Modifier.fillMaxWidth().aspectRatio(1f).swipeToSkip(vm::skip).clip(RoundedCornerShape(12.dp)))
                 Spacer(Modifier.weight(1f))
                 Text(state.title, style = MaterialTheme.typography.headlineSmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
                 Text(state.artist, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Seek(state, vm::seekTo)
                 if (state.isAudiobook) GoBack(vm)
                 Row(Modifier.fillMaxWidth().padding(vertical = 16.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                    Toggle(Icons.Rounded.Shuffle, "Shuffle", state.shuffle, vm::toggleShuffle)
-                    // A book skips 10 s instead of chapters; the queue still lists the chapters.
+                    // A book has speed and a sleep timer where shuffle and repeat would be, and skips 10 s instead of
+                    // chapters; the queue still lists the chapters.
+                    if (state.isAudiobook) Speed(state.speed, vm::setSpeed)
+                    else Toggle(Icons.Rounded.Shuffle, "Shuffle", state.shuffle, vm::toggleShuffle)
                     if (state.isAudiobook) {
                         IconButton(onClick = vm::skipBack, modifier = Modifier.size(56.dp)) { Icon(Icons.Rounded.Replay10, "Back 10 seconds", Modifier.size(36.dp)) }
                     } else {
@@ -126,7 +138,8 @@ fun NowPlayingSheet(state: NowPlayingState, vm: NowPlayingViewModel, onDismiss: 
                     } else {
                         IconButton(onClick = vm::next, modifier = Modifier.size(56.dp)) { Icon(Icons.Rounded.SkipNext, "Next", Modifier.size(36.dp)) }
                     }
-                    Toggle(
+                    if (state.isAudiobook) Sleep(vm.sleep)
+                    else Toggle(
                         if (state.repeatMode == Player.REPEAT_MODE_ONE) Icons.Rounded.RepeatOne else Icons.Rounded.Repeat, "Repeat",
                         state.repeatMode != Player.REPEAT_MODE_OFF, vm::cycleRepeat,
                     )
@@ -177,6 +190,43 @@ private fun Seek(state: NowPlayingState, onSeek: (Long) -> Unit) {
         val c = MaterialTheme.colorScheme.onSurfaceVariant
         Text(formatTime(if (dragging != null) (shown * state.durationMs).toLong() else state.positionMs), style = t, color = c)
         Text(formatTime(state.durationMs), style = t, color = c)
+    }
+}
+
+private val Speeds = listOf(0.8f, 1f, 1.2f, 1.5f, 1.75f, 2f)
+
+/** "1.5×"; tapping it lists the speeds. */
+@Composable
+private fun Speed(speed: Float, onPick: (Float) -> Unit) {
+    var open by remember { mutableStateOf(false) }
+    val label = { s: Float -> s.toString().removeSuffix(".0") + "×" }
+    Box {
+        TextButton(onClick = { open = true }) { Text(label(speed), color = MaterialTheme.colorScheme.onBackground) }
+        DropdownMenu(open, { open = false }) {
+            Speeds.forEach { s -> DropdownMenuItem(text = { Text(label(s)) }, onClick = { onPick(s); open = false }) }
+        }
+    }
+}
+
+/** A moon, or the minutes left once set; tapping it lists the choices. */
+@Composable
+private fun Sleep(timer: SleepTimer) {
+    val mode by timer.mode.collectAsState()
+    var open by remember { mutableStateOf(false) }
+    // The minutes left tick on their own, not with the player.
+    val now by produceState(SystemClock.elapsedRealtime(), mode) { while (true) { value = SystemClock.elapsedRealtime(); delay(1_000) } }
+    Box {
+        when (val m = mode) {
+            is SleepTimer.After -> TextButton(onClick = { open = true }) {
+                Text("${ceil((m.endsAt - now) / 60_000.0).toInt().coerceAtLeast(1)}m", color = MaterialTheme.colorScheme.onBackground)
+            }
+            else -> Toggle(Icons.Rounded.Bedtime, "Sleep timer", m == SleepTimer.ChapterEnd) { open = true }
+        }
+        DropdownMenu(open, { open = false }) {
+            listOf(15, 30, 60).forEach { min -> DropdownMenuItem(text = { Text("$min minutes") }, onClick = { timer.after(min); open = false }) }
+            DropdownMenuItem(text = { Text("End of chapter") }, onClick = { timer.atChapterEnd(); open = false })
+            if (mode != null) DropdownMenuItem(text = { Text("Turn off") }, onClick = { timer.cancel(); open = false })
+        }
     }
 }
 

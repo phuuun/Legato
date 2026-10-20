@@ -44,7 +44,7 @@ class FolderStore(context: Context) {
 
     fun hide(paths: Collection<String>) = prefs.edit { putStringSet(HIDDEN, read(HIDDEN) + paths) }
 
-    fun unhide(path: String) = prefs.edit { putStringSet(HIDDEN, read(HIDDEN) - path) }
+    fun unhide(paths: Collection<String>) = prefs.edit { putStringSet(HIDDEN, read(HIDDEN) - paths.toSet()) }
 
     /** The folder the converter last saved this kind into. */
     fun lastFolder(kind: FolderKind): String? = prefs.getString(kind.lastKey, null)

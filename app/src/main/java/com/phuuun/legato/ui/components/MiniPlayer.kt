@@ -26,10 +26,10 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.phuuun.legato.ui.nowplaying.NowPlayingState
 
-/** Sits above the bottom bar while anything is queued; tapping it opens the full player. */
+/** Sits above the bottom bar while anything is queued; tapping it or swiping it up opens the full player, swiping sideways skips. */
 @Composable
-fun MiniPlayer(state: NowPlayingState, onToggle: () -> Unit, onOpen: () -> Unit) {
-    Column(Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surface).clickable(onClick = onOpen)) {
+fun MiniPlayer(state: NowPlayingState, onToggle: () -> Unit, onSkip: (forward: Boolean) -> Unit, onOpen: () -> Unit) {
+    Column(Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surface).clickable(onClick = onOpen).swipeToSkip(onSkip, onUp = onOpen)) {
         val progress = if (state.durationMs > 0) (state.positionMs.toFloat() / state.durationMs).coerceIn(0f, 1f) else 0f
         Box(Modifier.fillMaxWidth(progress).height(2.dp).background(MaterialTheme.colorScheme.onBackground))
         Row(

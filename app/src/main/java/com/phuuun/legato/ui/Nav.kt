@@ -99,6 +99,18 @@ import com.phuuun.legato.library.inFolders
 import com.phuuun.legato.ui.settings.SettingsScreen
 import com.phuuun.legato.ui.settings.SettingsSection
 import kotlinx.coroutines.launch
+import androidx.compose.foundation.layout.Box
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.runtime.derivedStateOf
+import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.layout.layout
+import androidx.compose.ui.platform.LocalFocusManager
+import com.phuuun.legato.ui.components.LegatoHeader
+import com.phuuun.legato.ui.components.offerUndo
+import com.phuuun.legato.ui.components.screen
+import com.phuuun.legato.ui.library.SearchField
+import kotlin.math.roundToInt
 
 private enum class Section(val label: String, val icon: ImageVector) {
     Music("MUSIC", Icons.Outlined.MusicNote),
@@ -132,7 +144,7 @@ private fun SlidingNavHost(nav: NavHostController, start: String, modifier: Modi
  */
 @Composable
 fun LegatoNav(library: LibraryRepository, audiobooks: LibraryRepository, player: PlayerConnection, playlistRepo: PlaylistRepository, folders: FolderStore, tagWriter: TagWriter, progress: ProgressStore, downloads: DownloadQueue,
-    sharedLink: String?, onSharedLinkUsed: () -> Unit,
+    sharedLink: String?, onSharedLinkUsed: () -> Unit, openPlayer: Boolean, onPlayerOpened: () -> Unit,
 ) {
     val root = rememberNavController()
     val musicNav = rememberNavController()
@@ -141,7 +153,7 @@ fun LegatoNav(library: LibraryRepository, audiobooks: LibraryRepository, player:
     // One view model for every destination, so the loaded library and the search box survive navigation.
     val vm: LibraryViewModel = viewModel(factory = viewModelFactory { initializer { LibraryViewModel(library) } })
     val state by vm.state.collectAsState()
-    val nowPlayingVm: NowPlayingViewModel = viewModel(factory = viewModelFactory { initializer { NowPlayingViewModel(player.controller) } })
+    val nowPlayingVm: NowPlayingViewModel = viewModel(factory = viewModelFactory { initializer { NowPlayingViewModel(player.controller, player.sleep) } })
     val now by nowPlayingVm.state.collectAsState()
     var expanded by rememberSaveable { mutableStateOf(false) }
     // Like YT Music: picking a song opens the full player; swiping it down leaves the mini player.
@@ -153,6 +165,8 @@ fun LegatoNav(library: LibraryRepository, audiobooks: LibraryRepository, player:
     val playlists by playlistRepo.playlists.collectAsState(emptyList())
     var adding by remember { mutableStateOf<List<Track>?>(null) }
     val toast = { text: String -> Toast.makeText(context, text, Toast.LENGTH_SHORT).show() }
+    val snackbar = remember { SnackbarHostState() }
+    val undo = { text: String, onUndo: () -> Unit -> scope.launch { snackbar.offerUndo(text, onUndo) }; Unit }
     val onSettings = { root.navigate("settings") { launchSingleTop = true } }
     val toSection = { s: Section ->
         if (root.currentDestination?.route != "main") root.popBackStack("main", inclusive = false)
@@ -160,9 +174,13 @@ fun LegatoNav(library: LibraryRepository, audiobooks: LibraryRepository, player:
     }
     // A link shared to Legato jumps to the converter, which takes it from there.
     LaunchedEffect(sharedLink) { if (sharedLink != null) toSection(Section.Converter) }
-    val audiobookTracks by audiobooks.tracks.collectAsState(emptyList())
-    val books = remember(audiobookTracks) { groupBooks(audiobookTracks) }
-    val audiobookFolders by remember { folders.folders(FolderKind.Audiobooks) }.collectAsState(emptySet())
+    // Tapping the playback notification opens the full player, over wherever the app was.
+    LaunchedEffect(openPlayer) { if (openPlayer) { expanded = true; onPlayerOpened() } }
+    // Null until the first scan lands, so the Audiobooks tab doesn't flash "No audiobooks" first.
+    val audiobookTracks by audiobooks.tracks.collectAsState(null)
+    val bookList = remember(audiobookTracks) { audiobookTracks?.let(::groupBooks) }
+    val books = bookList.orEmpty()
+    val audiobookFolders by remember { folders.folders(FolderKind.Audiobooks) }.collectAsState(null)
     val spots by remember { progress.spots() }.collectAsState(emptyMap())
     // A book picks up where it stopped (less 5 s); a chapter picked by hand picks up at its own spot.
     val playBook = { b: Book -> val (i, ms) = resumePoint(b.chapters, spots); player.play(b.chapters, i, ms, audiobook = true); expanded = true }
@@ -172,114 +190,157 @@ fun LegatoNav(library: LibraryRepository, audiobooks: LibraryRepository, player:
             queue = { tracks, next -> player.queue(tracks, next); toast(if (next) "Playing next" else "Added to queue") },
             addToPlaylist = { adding = it },
             edit = { root.navigate("edit/${it.id}") },
-            hide = { tracks -> folders.hide(tracks.map { it.path }); toast("Hidden. Unhide it in Settings.") },
+            hide = { tracks ->
+                val paths = tracks.map { it.path }
+                folders.hide(paths)
+                undo(if (tracks.size == 1) "Hid ${tracks.single().title}" else "Hid ${tracks.size} files") { folders.unhide(paths) }
+            },
         )
     }
 
     Column(Modifier.fillMaxSize()) {
         // The bar below owns the navigation-bar inset; each screen's frame handles the top (see Modifier.screen).
-        SlidingNavHost(root, "main", Modifier.weight(1f).consumeWindowInsets(WindowInsets.navigationBars)) {
-            composable("main") {
-                HorizontalPager(pager, Modifier.fillMaxSize()) { page ->
-                    when (Section.entries[page]) {
-                        Section.Music -> SlidingNavHost(musicNav, "library") {
-                            composable("library") {
-                                LibraryScreen(state, vm::setQuery, onPlay, onAlbum = { musicNav.navigate("album/$it") }, onArtist = { musicNav.navigate("artist/${Uri.encode(it)}") }, actions = actions,
-                                    playlistsTab = { PlaylistsList(playlists, onOpen = { musicNav.navigate("playlist/$it") }, onCreate = { scope.launch { playlistRepo.create(it) } }) },
-                                    onSettings = onSettings,
-                                )
-                            }
-                            composable("album/{id}", listOf(navArgument("id") { type = NavType.LongType })) { e ->
-                                val id = e.arguments?.getLong("id")
-                                val album = state.albums.firstOrNull { it.id == id }
-                                AlbumScreen(album, onBack = { musicNav.popBackStack() }, onPlay = onPlay, actions = actions) {
-                                    if (album != null) PlayShuffle(album.tracks, onPlay, Modifier.padding(top = 12.dp))
+        // Undo snackbars sit just above the mini player, over whichever screen is showing.
+        Box(Modifier.weight(1f)) {
+            SlidingNavHost(root, "main", Modifier.fillMaxSize().consumeWindowInsets(WindowInsets.navigationBars)) {
+                composable("main") {
+                    Column(Modifier.screen()) {
+                        // The name, settings and search stay put while the pages slide under them. Search only means
+                        // something for Music and Audiobooks, so it folds away as Converter slides in, in step with the finger.
+                        LegatoHeader(onSettings)
+                        val toConverter by remember { derivedStateOf { (pager.currentPage + pager.currentPageOffsetFraction - Section.Audiobooks.ordinal).coerceIn(0f, 1f) } }
+                        val focus = LocalFocusManager.current
+                        LaunchedEffect(pager.settledPage) { if (pager.settledPage == Section.Converter.ordinal) focus.clearFocus() }
+                        SearchField(
+                            state.query,
+                            onQuery = { q ->
+                                vm.setQuery(q)
+                                // Results show on a section's first page, so typing over an open album goes back to it.
+                                if (pager.currentPage == Section.Music.ordinal) musicNav.popBackStack("library", inclusive = false)
+                                else bookNav.popBackStack("books", inclusive = false)
+                            },
+                            Modifier.clipToBounds().layout { m, c ->
+                                val p = m.measure(c)
+                                layout(p.width, (p.height * (1 - toConverter)).roundToInt()) {
+                                    p.placeRelativeWithLayer(-(p.width * toConverter).roundToInt(), 0) { alpha = 1 - toConverter }
                                 }
-                            }
-                            composable("artist/{name}", listOf(navArgument("name") { type = NavType.StringType })) { e ->
-                                val name = e.arguments?.getString("name")
-                                ArtistScreen(state.artists.firstOrNull { it.name == name }, onBack = { musicNav.popBackStack() }, onAlbum = { musicNav.navigate("album/$it") }, onPlay = onPlay, actions = actions)
-                            }
-                            composable("playlist/{id}", listOf(navArgument("id") { type = NavType.LongType })) { e ->
-                                val id = e.arguments?.getLong("id") ?: 0
-                                val tracks by remember(id) { playlistRepo.tracksOf(id) }.collectAsState(emptyList())
-                                PlaylistScreen(
-                                    playlists.firstOrNull { it.id == id }, tracks, onBack = { musicNav.popBackStack() }, onPlay = onPlay, actions = actions,
-                                    onRename = { scope.launch { playlistRepo.rename(id, it) } },
-                                    onDelete = { scope.launch { playlistRepo.delete(id) }; musicNav.popBackStack() },
-                                    onRemove = { scope.launch { playlistRepo.removeAt(id, it) } },
-                                    onMove = { from, to -> scope.launch { playlistRepo.move(id, from, to) } },
-                                )
+                            },
+                        )
+                        HorizontalPager(pager, Modifier.fillMaxSize()) { page ->
+                            when (Section.entries[page]) {
+                                Section.Music -> SlidingNavHost(musicNav, "library") {
+                                    composable("library") {
+                                        LibraryScreen(state, onPlay, onAlbum = { musicNav.navigate("album/$it") }, onArtist = { musicNav.navigate("artist/${Uri.encode(it)}") }, actions = actions,
+                                            playlistsTab = { PlaylistsList(playlists, onOpen = { musicNav.navigate("playlist/$it") }, onCreate = { scope.launch { playlistRepo.create(it) } }) },
+                                        )
+                                    }
+                                    composable("album/{id}", listOf(navArgument("id") { type = NavType.LongType })) { e ->
+                                        val id = e.arguments?.getLong("id")
+                                        val album = state.albums.firstOrNull { it.id == id }
+                                        AlbumScreen(album, onBack = { musicNav.popBackStack() }, onPlay = onPlay, actions = actions) {
+                                            if (album != null) PlayShuffle(album.tracks, onPlay, Modifier.padding(top = 12.dp))
+                                        }
+                                    }
+                                    composable("artist/{name}", listOf(navArgument("name") { type = NavType.StringType })) { e ->
+                                        val name = e.arguments?.getString("name")
+                                        ArtistScreen(state.artists.firstOrNull { it.name == name }, onBack = { musicNav.popBackStack() }, onAlbum = { musicNav.navigate("album/$it") }, onPlay = onPlay, actions = actions)
+                                    }
+                                    composable("playlist/{id}", listOf(navArgument("id") { type = NavType.LongType })) { e ->
+                                        val id = e.arguments?.getLong("id") ?: 0
+                                        val tracks by remember(id) { playlistRepo.tracksOf(id) }.collectAsState(emptyList())
+                                        PlaylistScreen(
+                                            playlists.firstOrNull { it.id == id }, tracks, onBack = { musicNav.popBackStack() }, onPlay = onPlay, actions = actions,
+                                            onRename = { scope.launch { playlistRepo.rename(id, it) } },
+                                            onDelete = {
+                                                val p = playlists.firstOrNull { it.id == id }
+                                                scope.launch {
+                                                    val ids = playlistRepo.trackIds(id)
+                                                    playlistRepo.delete(id)
+                                                    if (p != null) undo("Deleted ${p.name}") { scope.launch { playlistRepo.restore(p, ids) } }
+                                                }
+                                                musicNav.popBackStack()
+                                            },
+                                            onRemove = { pos ->
+                                                val t = tracks.getOrNull(pos)
+                                                scope.launch { playlistRepo.removeAt(id, pos) }
+                                                if (t != null) undo("Removed ${t.title}") { scope.launch { playlistRepo.insertAt(id, pos, t.id) } }
+                                            },
+                                            onMove = { from, to -> scope.launch { playlistRepo.move(id, from, to) } },
+                                        )
+                                    }
+                                }
+                                // A one-file book plays straight away; chapter files open as a list, like an album.
+                                Section.Audiobooks -> SlidingNavHost(bookNav, "books") {
+                                    composable("books") {
+                                        AudiobooksScreen(
+                                            bookList, spots, audiobookFolders?.isNotEmpty(), state.query, actions = actions, onResume = playBook,
+                                            onBook = { b -> if (b.chapters.size == 1) playBook(b) else bookNav.navigate("book/${b.id}") },
+                                        )
+                                    }
+                                    composable("book/{id}", listOf(navArgument("id") { type = NavType.LongType })) { e ->
+                                        val id = e.arguments?.getLong("id")
+                                        val book = books.firstOrNull { it.id == id }
+                                        AlbumScreen(book?.asAlbum(), onBack = { bookNav.popBackStack() }, onPlay = playChapter, actions = actions) {
+                                            if (book != null) ResumeButton(book, spots) { playBook(book) }
+                                        }
+                                    }
+                                }
+                                Section.Converter -> ConverterScreen(converter, sharedLink, onSharedLinkUsed, folders, downloads)
                             }
                         }
-                        // A one-file book plays straight away; chapter files open as a list, like an album.
-                        Section.Audiobooks -> SlidingNavHost(bookNav, "books") {
-                            composable("books") {
-                                AudiobooksScreen(
-                                    books, spots, audiobookFolders.isNotEmpty(), actions = actions, onSettings = onSettings,
-                                    onBook = { b -> if (b.chapters.size == 1) playBook(b) else bookNav.navigate("book/${b.id}") },
-                                )
-                            }
-                            composable("book/{id}", listOf(navArgument("id") { type = NavType.LongType })) { e ->
-                                val id = e.arguments?.getLong("id")
-                                val book = books.firstOrNull { it.id == id }
-                                AlbumScreen(book?.asAlbum(), onBack = { bookNav.popBackStack() }, onPlay = playChapter, actions = actions) {
-                                    if (book != null) ResumeButton(book, spots) { playBook(book) }
+                    }
+                }
+                composable("edit/{id}", listOf(navArgument("id") { type = NavType.LongType })) { e ->
+                    val id = e.arguments?.getLong("id")
+                    val book = books.firstOrNull { b -> b.chapters.any { it.id == id } }
+                    val track = book?.chapters?.first { it.id == id } ?: state.tracks.firstOrNull { it.id == id }
+                    EditScreen(
+                        track, if (book != null) FolderKind.Audiobooks else FolderKind.Music, book?.chapters?.size ?: 1, onBack = { root.popBackStack() },
+                        onSave = { properties, cover ->
+                            // Pops Edit itself, never the screen below it, in case Edit was already left while saving.
+                            scope.launch { if (track != null && tagWriter.write(track, properties, cover)) root.popBackStack("edit/{id}", inclusive = true) else toast("Couldn't save ${track?.title}") }
+                        },
+                    )
+                }
+                composable("fix") {
+                    val rows = remember { fixRows(state.tracks) }
+                    BulkFixScreen(rows, onBack = { root.popBackStack() }, write = { t, e -> tagWriter.write(t, e.properties(), CoverChange.Keep) })
+                }
+                composable("settings") {
+                    SettingsScreen(onBack = { root.popBackStack() }) { section ->
+                        when (section) {
+                            SettingsSection.Music -> {
+                                val f by remember { folders.folders(FolderKind.Music) }.collectAsState(emptySet())
+                                val hidden by remember { folders.hidden }.collectAsState(emptySet())
+                                FoldersPane(f, "Only files directly in these folders show up. With no folders, all music shows.", { folders.add(FolderKind.Music, it) }, { folders.remove(FolderKind.Music, it) }) {
+                                    Text(
+                                        "Fix unknown artists (${state.tracks.count { it.artists.isEmpty() }})", style = MaterialTheme.typography.bodyLarge,
+                                        modifier = Modifier.fillMaxWidth().clickable { root.navigate("fix") }.padding(horizontal = 16.dp, vertical = 12.dp),
+                                    )
+                                    // Anything not in an audiobook folder counts as music here.
+                                    HiddenFiles(hidden.filterNot { inFolders(it, audiobookFolders.orEmpty()) }) { folders.unhide(listOf(it)) }
                                 }
                             }
+                            SettingsSection.Audiobooks -> {
+                                val f by remember { folders.folders(FolderKind.Audiobooks) }.collectAsState(emptySet())
+                                val hidden by remember { folders.hidden }.collectAsState(emptySet())
+                                FoldersPane(f, null, { folders.add(FolderKind.Audiobooks, it) }, { folders.remove(FolderKind.Audiobooks, it) }) {
+                                    HiddenFiles(hidden.filter { inFolders(it, f) }) { folders.unhide(listOf(it)) }
+                                }
+                            }
+                            SettingsSection.Converter -> Text("Downloads go to the folder you pick in the Converter. Add more folders under Music and Audiobooks.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(20.dp))
                         }
-                        Section.Converter -> ConverterScreen(converter, sharedLink, onSharedLinkUsed, folders, downloads, onSettings)
                     }
                 }
             }
-            composable("edit/{id}", listOf(navArgument("id") { type = NavType.LongType })) { e ->
-                val id = e.arguments?.getLong("id")
-                val book = books.firstOrNull { b -> b.chapters.any { it.id == id } }
-                val track = book?.chapters?.first { it.id == id } ?: state.tracks.firstOrNull { it.id == id }
-                EditScreen(
-                    track, if (book != null) FolderKind.Audiobooks else FolderKind.Music, book?.chapters?.size ?: 1, onBack = { root.popBackStack() },
-                    onSave = { properties, cover ->
-                        scope.launch { if (track != null && tagWriter.write(track, properties, cover)) root.popBackStack() else toast("Couldn't save ${track?.title}") }
-                    },
-                )
-            }
-            composable("fix") {
-                val rows = remember { fixRows(state.tracks) }
-                BulkFixScreen(rows, onBack = { root.popBackStack() }, write = { t, e -> tagWriter.write(t, e.properties(), CoverChange.Keep) })
-            }
-            composable("settings") {
-                SettingsScreen(onBack = { root.popBackStack() }) { section ->
-                    when (section) {
-                        SettingsSection.Music -> {
-                            val f by remember { folders.folders(FolderKind.Music) }.collectAsState(emptySet())
-                            val hidden by remember { folders.hidden }.collectAsState(emptySet())
-                            FoldersPane(f, "Only files directly in these folders show up. With no folders, all music shows.", { folders.add(FolderKind.Music, it) }, { folders.remove(FolderKind.Music, it) }) {
-                                Text(
-                                    "Fix unknown artists (${state.tracks.count { it.artists.isEmpty() }})", style = MaterialTheme.typography.bodyLarge,
-                                    modifier = Modifier.fillMaxWidth().clickable { root.navigate("fix") }.padding(horizontal = 16.dp, vertical = 12.dp),
-                                )
-                                // Anything not in an audiobook folder counts as music here.
-                                HiddenFiles(hidden.filterNot { inFolders(it, audiobookFolders) }, folders::unhide)
-                            }
-                        }
-                        SettingsSection.Audiobooks -> {
-                            val f by remember { folders.folders(FolderKind.Audiobooks) }.collectAsState(emptySet())
-                            val hidden by remember { folders.hidden }.collectAsState(emptySet())
-                            FoldersPane(f, null, { folders.add(FolderKind.Audiobooks, it) }, { folders.remove(FolderKind.Audiobooks, it) }) {
-                                HiddenFiles(hidden.filter { inFolders(it, f) }, folders::unhide)
-                            }
-                        }
-                        SettingsSection.Converter -> Text("Downloads go to the folder you pick in the Converter. Add more folders under Music and Audiobooks.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(20.dp))
-                    }
-                }
-            }
+            SnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter))
         }
         // The mini player slides up when something starts and away when the queue empties; it shows the last
         // track while it leaves, so it doesn't blank out mid-animation.
         var shown by remember { mutableStateOf(now) }
         LaunchedEffect(now) { if (now != null) shown = now }
         AnimatedVisibility(now != null, enter = expandVertically(expandFrom = Alignment.Top) + fadeIn(), exit = shrinkVertically(shrinkTowards = Alignment.Top) + fadeOut()) {
-            (now ?: shown)?.let { MiniPlayer(it, nowPlayingVm::togglePlay, onOpen = { expanded = true }) }
+            (now ?: shown)?.let { MiniPlayer(it, nowPlayingVm::togglePlay, nowPlayingVm::skip, onOpen = { expanded = true }) }
         }
         HorizontalDivider(thickness = 0.5.dp, color = MaterialTheme.colorScheme.outline)
         NavigationBar(containerColor = MaterialTheme.colorScheme.background, tonalElevation = 0.dp) {

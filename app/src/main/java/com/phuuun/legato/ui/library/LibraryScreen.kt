@@ -30,36 +30,35 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import com.phuuun.legato.ui.components.screen
 import com.phuuun.legato.library.Track
-import com.phuuun.legato.ui.components.LegatoHeader
 
 private enum class Tab(val label: String) { Songs("SONGS"), Albums("ALBUMS"), Artists("ARTISTS"), Playlists("PLAYLISTS") }
+
+/** The one search box, above Music and Audiobooks alike. */
+@Composable
+fun SearchField(query: String, onQuery: (String) -> Unit, modifier: Modifier = Modifier) =
+    TextField(
+        value = query, onValueChange = onQuery, singleLine = true,
+        placeholder = { Text("Search") },
+        colors = TextFieldDefaults.colors(
+            focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant, unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
+            focusedIndicatorColor = androidx.compose.ui.graphics.Color.Transparent, unfocusedIndicatorColor = androidx.compose.ui.graphics.Color.Transparent,
+        ),
+        shape = androidx.compose.foundation.shape.RoundedCornerShape(12.dp),
+        modifier = modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp),
+    )
 
 @Composable
 fun LibraryScreen(
     state: LibraryState,
-    onQuery: (String) -> Unit,
     onPlay: (List<Track>, Int) -> Unit,
     onAlbum: (Long) -> Unit,
     onArtist: (String) -> Unit,
     actions: TrackActions,
     playlistsTab: @Composable () -> Unit,
-    onSettings: () -> Unit,
 ) {
     var tab by rememberSaveable { mutableStateOf(Tab.Songs) }
-    Column(Modifier.screen()) {
-        LegatoHeader(onSettings)
-        TextField(
-            value = state.query, onValueChange = onQuery, singleLine = true,
-            placeholder = { Text("Search") },
-            colors = TextFieldDefaults.colors(
-                focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant, unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
-                focusedIndicatorColor = androidx.compose.ui.graphics.Color.Transparent, unfocusedIndicatorColor = androidx.compose.ui.graphics.Color.Transparent,
-            ),
-            shape = androidx.compose.foundation.shape.RoundedCornerShape(12.dp),
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp),
-        )
+    Column(Modifier.fillMaxSize()) {
         if (state.query.isBlank()) {
             Row(Modifier.padding(horizontal = 20.dp, vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(20.dp)) {
                 Tab.entries.forEach { t ->

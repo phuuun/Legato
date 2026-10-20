@@ -30,6 +30,17 @@ class PlaylistRepository(private val db: LegatoDb, private val library: LibraryR
 
     suspend fun removeAt(playlistId: Long, position: Int) = edit(playlistId) { if (position in it.indices) it.removeAt(position) }
 
+    /** Undoes [removeAt]. */
+    suspend fun insertAt(playlistId: Long, position: Int, trackId: Long) = edit(playlistId) { it.add(position.coerceIn(0, it.size), trackId) }
+
+    suspend fun trackIds(playlistId: Long): List<Long> = dao.trackIds(playlistId).first()
+
+    /** Undoes [delete]: same id and creation time, so it lands back in its old place in the list. */
+    suspend fun restore(playlist: Playlist, trackIds: List<Long>) {
+        dao.insert(playlist)
+        addTracks(playlist.id, trackIds)
+    }
+
     suspend fun move(playlistId: Long, from: Int, to: Int) = edit(playlistId) {
         if (from in it.indices) {
             val t = it.removeAt(from)
