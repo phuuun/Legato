@@ -19,6 +19,7 @@ data class Track(
     val composer: String = "",
     val modified: Long = 0,
     val artists: List<String> = emptyList(),
+    val added: Long = 0,
 )
 
 /** The album tag as the file has it: blank when MediaStore made one up ("Unknown album", or the folder's name for an untagged file). */
@@ -47,6 +48,7 @@ fun trackFromRow(
     relativePath: String = "",
     composer: String? = null,
     modified: Long = 0,
+    added: Long = 0,
 ): Track {
     val uri = ContentUris.withAppendedId(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, id)
     val artists = artist.orEmpty().split(';').map { it.trim() }.filter { it.isNotEmpty() && it != MediaStore.UNKNOWN_STRING }
@@ -65,5 +67,6 @@ fun trackFromRow(
         composer = composer?.takeIf { it != MediaStore.UNKNOWN_STRING }.orEmpty(),
         modified = modified,
         artists = artists,
+        added = added,
     )
 }

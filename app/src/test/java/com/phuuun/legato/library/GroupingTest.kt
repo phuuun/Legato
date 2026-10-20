@@ -18,6 +18,18 @@ class GroupingTest {
     }
 
     @Test
+    fun songs_sort_by_title_artist_or_newest() {
+        val songs = listOf(
+            trackFromRow(1, "beta", "Zed", "X", 1, 1000, "1.mp3", added = 300),
+            trackFromRow(2, "Alpha", "amy", "X", 1, 1000, "2.mp3", added = 100),
+            trackFromRow(3, "Gamma", "Bob", "X", 1, 1000, "3.mp3", added = 200),
+        )
+        assertEquals(listOf(2L, 1L, 3L), songs.sortedFor(Sort.Title).map { it.id })
+        assertEquals(listOf(2L, 3L, 1L), songs.sortedFor(Sort.Artist).map { it.id })
+        assertEquals(listOf(1L, 3L, 2L), songs.sortedFor(Sort.Recent).map { it.id })
+    }
+
+    @Test
     fun albums_sorted_by_title_case_insensitive() {
         val albums = groupAlbums(listOf(row(1, "banana", 1), row(2, "Apple", 2), row(3, "cherry", 3)))
         assertEquals(listOf("Apple", "banana", "cherry"), albums.map { it.title })

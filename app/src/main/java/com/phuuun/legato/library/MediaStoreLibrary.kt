@@ -44,7 +44,7 @@ class MediaStoreLibrary(context: Context, folders: Flow<Set<String>>, private va
             MediaStore.Audio.Media._ID, MediaStore.Audio.Media.TITLE, MediaStore.Audio.Media.ARTIST,
             MediaStore.Audio.Media.ALBUM, MediaStore.Audio.Media.ALBUM_ID, MediaStore.Audio.Media.DURATION,
             MediaStore.Audio.Media.DISPLAY_NAME, MediaStore.Audio.Media.TRACK,
-            MediaStore.Audio.Media.DATA, MediaStore.Audio.Media.RELATIVE_PATH, MediaStore.Audio.Media.COMPOSER, MediaStore.Audio.Media.DATE_MODIFIED,
+            MediaStore.Audio.Media.DATA, MediaStore.Audio.Media.RELATIVE_PATH, MediaStore.Audio.Media.COMPOSER, MediaStore.Audio.Media.DATE_MODIFIED, MediaStore.Audio.Media.DATE_ADDED,
         )
         val out = mutableListOf<Track>()
         resolver.query(
@@ -55,7 +55,7 @@ class MediaStoreLibrary(context: Context, folders: Flow<Set<String>>, private va
                     id = c.getLong(0), title = c.getString(1), artist = c.getString(2), album = c.getString(3),
                     albumId = c.getLong(4), durationMs = c.getLong(5), displayName = c.getString(6) ?: "",
                     trackNumber = c.getInt(7), path = c.getString(8) ?: "", relativePath = c.getString(9) ?: "",
-                    composer = c.getString(10), modified = c.getLong(11),
+                    composer = c.getString(10), modified = c.getLong(11), added = c.getLong(12),
                 )
             }
         }

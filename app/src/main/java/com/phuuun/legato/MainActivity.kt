@@ -44,7 +44,7 @@ class MainActivity : ComponentActivity() {
                 Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
                     PermissionGate {
                         LegatoNav(
-                            app.library, app.audiobooks, app.player, app.playlists, app.folders, app.tagWriter, app.progress, app.downloads,
+                            app.library, app.audiobooks, app.player, app.playlists, app.folders, app.tagWriter, app.progress, app.bookmarks, app.downloads,
                             sharedLink = shared, onSharedLinkUsed = { shared = null },
                             openPlayer = openPlayer, onPlayerOpened = { openPlayer = false },
                         )

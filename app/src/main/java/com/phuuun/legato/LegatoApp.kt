@@ -5,6 +5,7 @@ import coil3.ImageLoader
 import coil3.PlatformContext
 import coil3.SingletonImageLoader
 import com.phuuun.legato.converter.DownloadQueue
+import com.phuuun.legato.library.BookmarkStore
 import com.phuuun.legato.library.FolderKind
 import com.phuuun.legato.library.FolderStore
 import com.phuuun.legato.library.LibraryRepository
@@ -26,6 +27,7 @@ class LegatoApp : Application(), SingletonImageLoader.Factory {
     val player by lazy { PlayerConnection(this) }
     val tagWriter by lazy { TagWriter(this) }
     val progress by lazy { ProgressStore(this) }
+    val bookmarks by lazy { BookmarkStore(this) }
     val downloads = DownloadQueue()
 
     // Playlists resolve against all music, not the chosen folders or hidden files: neither may prune a playlist.

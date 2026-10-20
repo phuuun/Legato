@@ -45,7 +45,7 @@ fun SearchField(query: String, onQuery: (String) -> Unit, modifier: Modifier = M
             focusedIndicatorColor = androidx.compose.ui.graphics.Color.Transparent, unfocusedIndicatorColor = androidx.compose.ui.graphics.Color.Transparent,
         ),
         shape = androidx.compose.foundation.shape.RoundedCornerShape(12.dp),
-        modifier = modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp),
+        modifier = modifier.fillMaxWidth().padding(start = 20.dp, top = 12.dp, bottom = 12.dp),
     )
 
 @Composable

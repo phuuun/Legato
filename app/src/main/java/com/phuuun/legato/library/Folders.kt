@@ -18,6 +18,7 @@ enum class FolderKind(val key: String, val lastKey: String) {
 enum class WhenEmpty { AllMusic, Nothing }
 
 private const val HIDDEN = "hidden_files"
+private const val SORT = "sort"
 
 /** Chosen folders, stored as MediaStore relative paths with a trailing slash ("Download/MUSIC/"). */
 class FolderStore(context: Context) {
@@ -26,25 +27,30 @@ class FolderStore(context: Context) {
     // A copy: the set SharedPreferences hands out must never be modified or kept.
     private fun read(key: String): Set<String> = prefs.getStringSet(key, emptySet())!!.toSet()
 
-    private fun watch(key: String): Flow<Set<String>> = callbackFlow {
-        val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, k -> if (k == key) trySend(read(key)) }
+    private fun <T> watch(key: String, value: () -> T): Flow<T> = callbackFlow {
+        val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, k -> if (k == key) trySend(value()) }
         prefs.registerOnSharedPreferenceChangeListener(listener)
-        trySend(read(key))
+        trySend(value())
         awaitClose { prefs.unregisterOnSharedPreferenceChangeListener(listener) }
     }.distinctUntilChanged()
 
-    fun folders(kind: FolderKind): Flow<Set<String>> = watch(kind.key)
+    fun folders(kind: FolderKind): Flow<Set<String>> = watch(kind.key) { read(kind.key) }
 
     fun add(kind: FolderKind, path: String) = prefs.edit { putStringSet(kind.key, read(kind.key) + path) }
 
     fun remove(kind: FolderKind, path: String) = prefs.edit { putStringSet(kind.key, read(kind.key) - path) }
 
     /** Files hidden from the library, by full path. They stay on disk, and in any playlist that has them. */
-    val hidden: Flow<Set<String>> get() = watch(HIDDEN)
+    val hidden: Flow<Set<String>> get() = watch(HIDDEN) { read(HIDDEN) }
 
     fun hide(paths: Collection<String>) = prefs.edit { putStringSet(HIDDEN, read(HIDDEN) + paths) }
 
     fun unhide(paths: Collection<String>) = prefs.edit { putStringSet(HIDDEN, read(HIDDEN) - paths.toSet()) }
+
+    /** How songs, albums and books are ordered; one choice for both sections. */
+    val sort: Flow<Sort> get() = watch(SORT) { Sort.entries.firstOrNull { it.name == prefs.getString(SORT, null) } ?: Sort.Title }
+
+    fun setSort(sort: Sort) = prefs.edit { putString(SORT, sort.name) }
 
     /** The folder the converter last saved this kind into. */
     fun lastFolder(kind: FolderKind): String? = prefs.getString(kind.lastKey, null)

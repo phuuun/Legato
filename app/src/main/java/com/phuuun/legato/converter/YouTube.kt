@@ -1,5 +1,8 @@
 package com.phuuun.legato.converter
 
+import androidx.core.text.HtmlCompat
+import com.phuuun.legato.library.Chapter
+import com.phuuun.legato.library.chaptersFromText
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.schabi.newpipe.extractor.MediaFormat
@@ -9,6 +12,7 @@ import org.schabi.newpipe.extractor.downloader.Downloader
 import org.schabi.newpipe.extractor.downloader.Request
 import org.schabi.newpipe.extractor.downloader.Response
 import org.schabi.newpipe.extractor.playlist.PlaylistInfo
+import org.schabi.newpipe.extractor.stream.Description
 import org.schabi.newpipe.extractor.stream.StreamInfo
 import java.net.HttpURLConnection
 import java.net.URI
@@ -21,6 +25,8 @@ fun bestAudio(options: List<AudioOption>): AudioOption? = options.filter { it.is
 data class Video(val url: String, val title: String, val uploader: String, val durationSec: Long, val thumbnail: String?)
 
 data class Playlist(val name: String, val videos: List<Video>)
+
+data class Stream(val audioUrl: String, val chapters: List<Chapter>)
 
 /** YouTube through NewPipeExtractor, the engine save4k and NewPipe use. Every call is network work on the IO pool. */
 object YouTube {
@@ -46,12 +52,20 @@ object YouTube {
         Playlist(info.name, items.map { Video(it.url, it.name, it.uploaderName.orEmpty(), it.duration, it.thumbnails.maxByOrNull { t -> t.height }?.url) })
     }
 
-    /** A fresh stream link: they expire within hours and are tied to this phone's IP, so fetch one right before downloading. */
-    suspend fun audioUrl(videoUrl: String): String = withContext(Dispatchers.IO) {
+    /**
+     * A fresh stream link (they expire within hours and are tied to this phone's IP, so fetch one right before
+     * downloading), and the video's chapters: YouTube's own, else the timestamp list in its description.
+     */
+    suspend fun stream(videoUrl: String): Stream = withContext(Dispatchers.IO) {
         started
         val info = StreamInfo.getInfo(ServiceList.YouTube, videoUrl)
-        bestAudio(info.audioStreams.map { AudioOption(it.content, it.format == MediaFormat.M4A, it.averageBitrate) })?.url
+        val url = bestAudio(info.audioStreams.map { AudioOption(it.content, it.format == MediaFormat.M4A, it.averageBitrate) })?.url
             ?: error("No M4A audio for this video")
+        val chapters = info.streamSegments.map { Chapter(it.title.orEmpty(), it.startTimeSeconds * 1000L) }.takeIf { it.size >= 2 }
+            ?: info.description?.let { d ->
+                chaptersFromText(if (d.type == Description.HTML) HtmlCompat.fromHtml(d.content, HtmlCompat.FROM_HTML_MODE_LEGACY).toString() else d.content)
+            }.orEmpty()
+        Stream(url, chapters)
     }
 }
 

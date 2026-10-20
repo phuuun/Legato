@@ -8,7 +8,12 @@ import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.common.util.Util
 import androidx.media3.session.MediaController
+import com.phuuun.legato.library.Bookmark
+import com.phuuun.legato.library.BookmarkStore
+import com.phuuun.legato.library.Chapter
+import com.phuuun.legato.library.readChapters
 import com.phuuun.legato.playback.SleepTimer
+import com.phuuun.legato.playback.path
 import com.phuuun.legato.playback.coverUri
 import com.phuuun.legato.playback.isAudiobook
 import kotlinx.coroutines.Job
@@ -17,6 +22,9 @@ import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.mapLatest
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.filterNotNull
@@ -37,6 +45,7 @@ data class NowPlayingState(
     val trackId: Long?,
     val isAudiobook: Boolean,
     val speed: Float,
+    val path: String?,
 )
 
 /** Where a book was before a jump: the chapter's queue index and the spot in it. */
@@ -44,7 +53,7 @@ data class BackSpot(val index: Int, val positionMs: Long)
 
 /** Null state means nothing is queued, so the mini player hides. */
 @OptIn(UnstableApi::class)
-class NowPlayingViewModel(val controller: StateFlow<MediaController?>, val sleep: SleepTimer) : ViewModel() {
+class NowPlayingViewModel(val controller: StateFlow<MediaController?>, val sleep: SleepTimer, private val bookmarkStore: BookmarkStore) : ViewModel() {
 
     @kotlin.OptIn(ExperimentalCoroutinesApi::class)
     val state: StateFlow<NowPlayingState?> = controller.filterNotNull().flatMapLatest { c ->
@@ -66,11 +75,29 @@ class NowPlayingViewModel(val controller: StateFlow<MediaController?>, val sleep
         return NowPlayingState(
             m.title?.toString().orEmpty(), m.artist?.toString().orEmpty(), item.coverUri(),
             currentPosition, duration, !Util.shouldShowPlayButton(this), shuffleModeEnabled, repeatMode,
-            currentMediaItem?.mediaId?.toLongOrNull(), item.isAudiobook, playbackParameters.speed,
+            currentMediaItem?.mediaId?.toLongOrNull(), item.isAudiobook, playbackParameters.speed, item.path(),
         )
     }
 
     private val c get() = controller.value
+
+    /** The chapters inside the book file playing (see readChapters); empty for music. Read once per file. */
+    @kotlin.OptIn(ExperimentalCoroutinesApi::class)
+    val chapters: StateFlow<List<Chapter>> = state.map { s -> s?.takeIf { it.isAudiobook }?.path }.distinctUntilChanged()
+        .mapLatest { path -> path?.let { readChapters(it, c?.currentMediaItem?.mediaMetadata?.durationMs ?: 0) }.orEmpty() }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    val bookmarks: StateFlow<List<Bookmark>> = bookmarkStore.bookmarks.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    fun addBookmark(trackId: Long, positionMs: Long, color: Int, caption: String) =
+        bookmarkStore.save(Bookmark(System.currentTimeMillis(), trackId, positionMs, color, caption.trim()))
+
+    fun saveBookmark(b: Bookmark) = bookmarkStore.save(b.copy(caption = b.caption.trim()))
+
+    fun deleteBookmark(id: Long) = bookmarkStore.delete(id)
+
+    /** To a chapter or bookmark: [index] in the queue, [ms] into it. Offers the way back like any other jump. */
+    fun jumpTo(index: Int, ms: Long) = jump { seekTo(index, ms) }
 
     // Handles the awkward states too: replays an ended queue, re-prepares after an error.
     fun togglePlay() { c?.let { Util.handlePlayPauseButtonAction(it) } }

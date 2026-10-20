@@ -5,7 +5,9 @@ import android.os.SystemClock
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -22,9 +24,11 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.List
 import androidx.compose.material.icons.automirrored.rounded.QueueMusic
 import androidx.compose.material.icons.automirrored.rounded.Undo
 import androidx.compose.material.icons.rounded.Bedtime
+import androidx.compose.material.icons.rounded.BookmarkAdd
 import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.Forward10
 import androidx.compose.material.icons.rounded.KeyboardArrowDown
@@ -61,6 +65,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -79,6 +85,11 @@ fun NowPlayingSheet(state: NowPlayingState, vm: NowPlayingViewModel, onDismiss: 
     val sheet = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val scope = rememberCoroutineScope()
     var queueOpen by remember { mutableStateOf(false) }
+    var bookOpen by remember { mutableStateOf(false) }
+    // Where a new bookmark goes: the file and spot when the button was tapped, not when the dialog is saved.
+    var marking by remember { mutableStateOf<Pair<Long, Long>?>(null) }
+    val chapters by vm.chapters.collectAsState()
+    val bookmarks by vm.bookmarks.collectAsState()
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheet,
@@ -104,7 +115,15 @@ fun NowPlayingSheet(state: NowPlayingState, vm: NowPlayingViewModel, onDismiss: 
                                 Icon(Icons.Rounded.Edit, contentDescription = "Edit info")
                             }
                         }
-                        IconButton(onClick = { queueOpen = true }) { Icon(Icons.AutoMirrored.Rounded.QueueMusic, contentDescription = "Queue") }
+                        // A book swaps the queue for its chapters and bookmarks.
+                        if (state.isAudiobook) {
+                            state.trackId?.let { id ->
+                                IconButton(onClick = { marking = id to (vm.controller.value?.currentPosition ?: state.positionMs) }) { Icon(Icons.Rounded.BookmarkAdd, contentDescription = "Add bookmark") }
+                            }
+                            IconButton(onClick = { bookOpen = true }) { Icon(Icons.AutoMirrored.Rounded.List, contentDescription = "Chapters and bookmarks") }
+                        } else {
+                            IconButton(onClick = { queueOpen = true }) { Icon(Icons.AutoMirrored.Rounded.QueueMusic, contentDescription = "Queue") }
+                        }
                     }
                 }
                 Spacer(Modifier.weight(1f))
@@ -112,7 +131,12 @@ fun NowPlayingSheet(state: NowPlayingState, vm: NowPlayingViewModel, onDismiss: 
                 Spacer(Modifier.weight(1f))
                 Text(state.title, style = MaterialTheme.typography.headlineSmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
                 Text(state.artist, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Seek(state, vm::seekTo)
+                chapters.lastOrNull { it.startMs <= state.positionMs }?.let { c ->
+                    Text(c.title, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 4.dp).clickable { bookOpen = true })
+                }
+                Seek(state, vm::seekTo) {
+                    if (state.isAudiobook) Marks(bookmarks.filter { it.trackId == state.trackId }.map { it.positionMs to bookmarkColor(it.color) }, state.durationMs)
+                }
                 if (state.isAudiobook) GoBack(vm)
                 Row(Modifier.fillMaxWidth().padding(vertical = 16.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                     // A book has speed and a sleep timer where shuffle and repeat would be, and skips 10 s instead of
@@ -149,6 +173,13 @@ fun NowPlayingSheet(state: NowPlayingState, vm: NowPlayingViewModel, onDismiss: 
         }
     }
     if (queueOpen) vm.controller.value?.let { QueueSheet(it, onDismiss = { queueOpen = false }) }
+    if (bookOpen) BookSheet(state, vm, onDismiss = { bookOpen = false })
+    marking?.let { (trackId, ms) ->
+        BookmarkDialog(
+            "Bookmark at ${formatTime(ms)}", "", 0,
+            onSave = { caption, color -> vm.addBookmark(trackId, ms, color, caption) }, onDelete = null, onDismiss = { marking = null },
+        )
+    }
 }
 
 /** "Back to 12:34" after a jump in a book; fades on its own. The slot keeps its height so nothing shifts. */
@@ -169,8 +200,17 @@ private fun GoBack(vm: NowPlayingViewModel) {
     }
 }
 
+/** Coloured dots under the seek bar where this file's bookmarks are. Inset like the slider's track. */
 @Composable
-private fun Seek(state: NowPlayingState, onSeek: (Long) -> Unit) {
+private fun Marks(marks: List<Pair<Long, Color>>, durationMs: Long) {
+    if (durationMs <= 0 || marks.isEmpty()) return
+    Canvas(Modifier.fillMaxWidth().padding(horizontal = 10.dp).height(8.dp)) {
+        marks.forEach { (ms, color) -> drawCircle(color, radius = 4.dp.toPx(), center = Offset(size.width * (ms.toFloat() / durationMs).coerceIn(0f, 1f), size.height / 2)) }
+    }
+}
+
+@Composable
+private fun Seek(state: NowPlayingState, onSeek: (Long) -> Unit, below: @Composable () -> Unit = {}) {
     // While the thumb is held, show where it is, not where the player is; seek once on release.
     var dragging by remember { mutableStateOf<Float?>(null) }
     val canSeek = state.durationMs > 0
@@ -185,6 +225,7 @@ private fun Seek(state: NowPlayingState, onSeek: (Long) -> Unit) {
         ),
         modifier = Modifier.padding(top = 16.dp),
     )
+    below()
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
         val t = MaterialTheme.typography.labelMedium
         val c = MaterialTheme.colorScheme.onSurfaceVariant

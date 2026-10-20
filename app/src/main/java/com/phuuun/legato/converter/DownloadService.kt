@@ -11,6 +11,7 @@ import android.os.Environment
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
 import com.phuuun.legato.LegatoApp
+import com.phuuun.legato.library.formatTimestamp
 import com.phuuun.legato.library.edit.CoverChange
 import com.phuuun.legato.library.edit.coverFromUrl
 import kotlinx.coroutines.CoroutineScope
@@ -74,7 +75,8 @@ class DownloadService : Service() {
             part = File(dir, PART + name)
             queue.set(job.id, JobState.Downloading(0))
             updateNotification("Downloading ${job.label}", 0)
-            val url = YouTube.audioUrl(job.videoUrl)
+            val stream = YouTube.stream(job.videoUrl)
+            val url = stream.audioUrl
             var shown = 0L
             withContext(Dispatchers.IO) {
                 download(url, part) { percent ->
@@ -89,7 +91,11 @@ class DownloadService : Service() {
             queue.set(job.id, JobState.Tagging)
             updateNotification("Tagging ${job.label}", null)
             val cover = job.thumbnail?.let { coverFromUrl(it) }?.let { CoverChange.Set(it) } ?: CoverChange.Keep
-            if (!app.tagWriter.write(part.path, job.properties, cover, rescan = false)) error("Couldn't write the tags")
+            // Chapters go in the comment as a timestamp list: a tag TagLib writes in every format, readable by
+            // people too, and what readChapters falls back to when a file has no chapter marks of its own.
+            val chapters = stream.chapters.takeIf { it.size >= 2 }?.joinToString("\n") { "${formatTimestamp(it.startMs)} ${it.title}" }
+            val properties = if (chapters != null) job.properties + ("COMMENT" to chapters) else job.properties
+            if (!app.tagWriter.write(part.path, properties, cover, rescan = false)) error("Couldn't write the tags")
             val target = File(dir, name)
             if (!part.renameTo(target)) error("Couldn't save the file")
             MediaScannerConnection.scanFile(this, arrayOf(target.path), null, null)

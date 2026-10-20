@@ -14,5 +14,13 @@ fun groupBooks(tracks: List<Track>): List<Book> =
         Book(if (key.startsWith("#")) chapters.first().title else key, chapters.first().artist, chapters.first().artUri, chapters)
     }.sortedBy { it.title.lowercase() }
 
+/** Title, author, or newest first (a book counts as added when its newest file was). */
+@JvmName("booksSortedFor")
+fun List<Book>.sortedFor(sort: Sort): List<Book> = when (sort) {
+    Sort.Title -> sortedBy { it.title.lowercase() }
+    Sort.Artist -> sortedWith(compareBy({ it.author.lowercase() }, { it.title.lowercase() }))
+    Sort.Recent -> sortedByDescending { b -> b.chapters.maxOf { it.added } }
+}
+
 /** Books show with the album card and album page: cover, title, author, then the chapters. */
 fun Book.asAlbum() = Album(id, title, author, artUri, chapters)
