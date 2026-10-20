@@ -16,6 +16,7 @@ import com.phuuun.legato.library.ProgressStore
 import com.phuuun.legato.library.WhenEmpty
 import com.phuuun.legato.library.db.LegatoDb
 import com.phuuun.legato.library.edit.TagWriter
+import com.phuuun.legato.playback.EqStore
 import com.phuuun.legato.playback.PlayerConnection
 import com.phuuun.legato.ui.components.AudioCoverFetcher
 import com.phuuun.legato.ui.components.AudioCoverKeyer
@@ -29,6 +30,7 @@ class LegatoApp : Application(), SingletonImageLoader.Factory {
     val tagWriter by lazy { TagWriter(this) }
     val progress by lazy { ProgressStore(this) }
     val bookmarks by lazy { BookmarkStore(this) }
+    val eq by lazy { EqStore(this) }
     val downloads = DownloadQueue()
 
     // Playlists resolve against all music, not the chosen folders or hidden files: neither may prune a playlist.

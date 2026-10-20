@@ -106,6 +106,8 @@ import androidx.compose.material3.TextButton
 import com.phuuun.legato.library.Backups
 import com.phuuun.legato.library.backupFromJson
 import com.phuuun.legato.ui.settings.BackupPane
+import com.phuuun.legato.ui.settings.EqPane
+import com.phuuun.legato.playback.EqStore
 import com.phuuun.legato.ui.playlists.SmartList
 import com.phuuun.legato.ui.playlists.SmartPlaylistScreen
 import kotlinx.coroutines.Dispatchers
@@ -213,7 +215,7 @@ private fun SlidingNavHost(nav: NavHostController, start: String, modifier: Modi
  * Edit and Bulk fix are full screens above the pages.
  */
 @Composable
-fun LegatoNav(library: LibraryRepository, audiobooks: LibraryRepository, player: PlayerConnection, playlistRepo: PlaylistRepository, folders: FolderStore, tagWriter: TagWriter, progress: ProgressStore, bookmarks: BookmarkStore, backups: Backups, downloads: DownloadQueue,
+fun LegatoNav(library: LibraryRepository, audiobooks: LibraryRepository, player: PlayerConnection, playlistRepo: PlaylistRepository, folders: FolderStore, tagWriter: TagWriter, progress: ProgressStore, bookmarks: BookmarkStore, backups: Backups, eq: EqStore, downloads: DownloadQueue,
     sharedLink: String?, onSharedLinkUsed: () -> Unit, openPlayer: Boolean, onPlayerOpened: () -> Unit,
 ) {
     val root = rememberNavController()
@@ -442,6 +444,7 @@ fun LegatoNav(library: LibraryRepository, audiobooks: LibraryRepository, player:
                                 }
                             }
                             SettingsSection.Backup -> BackupPane(backups, backUpNow, restoreFrom)
+                        SettingsSection.Sound -> EqPane(eq)
                         SettingsSection.Converter -> Text("Downloads go to the folder you pick in the Converter. Add more folders under Music and Audiobooks.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(20.dp))
                         }
                     }

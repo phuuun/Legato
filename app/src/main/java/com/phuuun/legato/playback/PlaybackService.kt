@@ -2,6 +2,7 @@ package com.phuuun.legato.playback
 
 import android.app.PendingIntent
 import android.content.Intent
+import android.media.audiofx.Equalizer
 import android.widget.Toast
 import androidx.core.content.edit
 import androidx.media3.common.MediaItem
@@ -53,6 +54,13 @@ class PlaybackService : MediaSessionService() {
                 session?.setMediaButtonPreferences(if (item?.isAudiobook == true) bookButtons else emptyList())
                 // Books play at the speed last picked for a book; music always at normal speed.
                 player.setPlaybackSpeed(if (item?.isAudiobook == true) prefs.getFloat(BOOK_SPEED, 1f) else 1f)
+                applyEq(player)
+            }
+
+            override fun onAudioSessionIdChanged(audioSessionId: Int) {
+                eq?.release()
+                eq = runCatching { Equalizer(0, audioSessionId) }.getOrNull()
+                applyEq(player)
             }
 
             override fun onPlaybackParametersChanged(params: PlaybackParameters) {
@@ -88,6 +96,8 @@ class PlaybackService : MediaSessionService() {
         // Without a session activity the notification has no tap target, and HyperOS opens some other media app instead.
         val open = PendingIntent.getActivity(this, 0, Intent(this, MainActivity::class.java).setAction(MainActivity.OPEN_PLAYER), PendingIntent.FLAG_IMMUTABLE)
         session = MediaSession.Builder(this, player).setSessionActivity(open).build()
+        eq = runCatching { Equalizer(0, player.audioSessionId) }.getOrNull()
+        scope.launch { (application as LegatoApp).eq.settings.collect { eqSettings = it; applyEq(player) } }
         // Audiobook spots also save every 10 s while playing, so a crash or a dead battery loses at most that.
         scope.launch {
             while (true) {
@@ -98,6 +108,20 @@ class PlaybackService : MediaSessionService() {
     }
 
     private val prefs by lazy { getSharedPreferences("settings", MODE_PRIVATE) }
+
+    // The phone's own equalizer on the player's audio session; null where the phone has none.
+    private var eq: Equalizer? = null
+    private var eqSettings = EqSettings()
+
+    /** Music gets the curve; a book always plays as recorded. */
+    private fun applyEq(player: Player) {
+        val e = eq ?: return
+        runCatching {
+            val (min, max) = e.bandLevelRange.let { it[0].toInt() to it[1].toInt() }
+            EqBands.forEachIndexed { i, hz -> e.setBandLevel(e.getBand(hz * 1000), (eqSettings.gains[i] * 100).toInt().coerceIn(min, max).toShort()) }
+            e.enabled = eqSettings.on && player.currentMediaItem?.isAudiobook != true
+        }
+    }
 
     private val bookButtons = listOf(
         CommandButton.Builder(CommandButton.ICON_SKIP_BACK_10).setDisplayName("Back 10 seconds")
@@ -119,6 +143,7 @@ class PlaybackService : MediaSessionService() {
 
     override fun onDestroy() {
         session?.player?.let { p -> p.currentMediaItem?.let { saveSpot(it, p.currentPosition) } }
+        eq?.release()
         session?.run { player.release(); release() }
         session = null
         scope.cancel()

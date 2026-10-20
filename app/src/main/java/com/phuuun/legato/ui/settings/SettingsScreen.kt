@@ -24,7 +24,7 @@ import androidx.compose.ui.unit.dp
 import com.phuuun.legato.ui.components.screen
 import com.phuuun.legato.ui.library.Back
 
-enum class SettingsSection(val label: String) { Music("MUSIC"), Audiobooks("AUDIOBOOKS"), Converter("CONVERTER"), Backup("BACKUP") }
+enum class SettingsSection(val label: String) { Music("MUSIC"), Audiobooks("AUDIOBOOKS"), Converter("CONVERTER"), Sound("SOUND"), Backup("BACKUP") }
 
 /** Two panes like a file manager: sections on the left, the chosen section's settings scroll on the right. */
 @Composable
