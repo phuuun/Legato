@@ -10,6 +10,7 @@ import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.Tracks
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.session.CommandButton
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
 import com.phuuun.legato.LegatoApp
@@ -44,6 +45,8 @@ class PlaybackService : MediaSessionService() {
                     playing?.let { saveSpot(it, it.mediaMetadata.durationMs ?: Long.MAX_VALUE) }
                 }
                 playing = item
+                // A book gets ±10 s in the notification and lock screen too; an empty list brings back previous/next.
+                session?.setMediaButtonPreferences(if (item?.isAudiobook == true) bookButtons else emptyList())
             }
 
             override fun onIsPlayingChanged(isPlaying: Boolean) {
@@ -83,6 +86,13 @@ class PlaybackService : MediaSessionService() {
             }
         }
     }
+
+    private val bookButtons = listOf(
+        CommandButton.Builder(CommandButton.ICON_SKIP_BACK_10).setDisplayName("Back 10 seconds")
+            .setPlayerCommand(Player.COMMAND_SEEK_BACK).setSlots(CommandButton.SLOT_BACK).build(),
+        CommandButton.Builder(CommandButton.ICON_SKIP_FORWARD_10).setDisplayName("Forward 10 seconds")
+            .setPlayerCommand(Player.COMMAND_SEEK_FORWARD).setSlots(CommandButton.SLOT_FORWARD).build(),
+    )
 
     private fun saveSpot(item: MediaItem, positionMs: Long) {
         if (item.isAudiobook) (application as LegatoApp).progress.save(item.trackId(), positionMs, System.currentTimeMillis())
