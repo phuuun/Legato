@@ -106,6 +106,8 @@ import androidx.compose.material3.TextButton
 import com.phuuun.legato.library.Backups
 import com.phuuun.legato.library.backupFromJson
 import com.phuuun.legato.ui.settings.BackupPane
+import com.phuuun.legato.ui.playlists.SmartList
+import com.phuuun.legato.ui.playlists.SmartPlaylistScreen
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import androidx.compose.foundation.layout.Row
@@ -327,7 +329,12 @@ fun LegatoNav(library: LibraryRepository, audiobooks: LibraryRepository, player:
                                 Section.Music -> SlidingNavHost(musicNav, "library") {
                                     composable("library") {
                                         LibraryScreen(state, onPlay, onAlbum = { musicNav.navigate("album/$it") }, onArtist = { musicNav.navigate("artist/${Uri.encode(it)}") }, actions = actions,
-                                            playlistsTab = { PlaylistsList(playlists, onOpen = { musicNav.navigate("playlist/$it") }, onCreate = { scope.launch { playlistRepo.create(it) } }) },
+                                            playlistsTab = {
+                                        PlaylistsList(
+                                            playlists, onOpen = { musicNav.navigate("playlist/$it") }, onSmart = { musicNav.navigate("smart/${it.name}") },
+                                            onCreate = { scope.launch { playlistRepo.create(it) } },
+                                        )
+                                    },
                                         )
                                     }
                                     composable("album/{id}", listOf(navArgument("id") { type = NavType.LongType })) { e ->
@@ -341,7 +348,17 @@ fun LegatoNav(library: LibraryRepository, audiobooks: LibraryRepository, player:
                                         val name = e.arguments?.getString("name")
                                         ArtistScreen(state.artists.firstOrNull { it.name == name }, onBack = { musicNav.popBackStack() }, onAlbum = { musicNav.navigate("album/$it") }, onPlay = onPlay, actions = actions)
                                     }
-                                    composable("playlist/{id}", listOf(navArgument("id") { type = NavType.LongType })) { e ->
+                                    composable("smart/{kind}", listOf(navArgument("kind") { type = NavType.StringType })) { e ->
+                                    val kind = SmartList.entries.firstOrNull { it.name == e.arguments?.getString("kind") } ?: SmartList.MostPlayed
+                                    val played by remember(kind) { playlistRepo.playedIds(byRecent = kind == SmartList.RecentlyPlayed) }.collectAsState(emptyList())
+                                    // Resolved against the music library, so hidden songs and audiobook chapters stay out.
+                                    val tracks = remember(kind, played, state.tracks) {
+                                        val byId = state.tracks.associateBy { it.id }
+                                        if (kind == SmartList.RecentlyAdded) state.tracks.sortedByDescending { it.added }.take(100) else played.mapNotNull { byId[it] }.take(100)
+                                    }
+                                    SmartPlaylistScreen(kind, tracks, onBack = { musicNav.popBackStack() }, onPlay = onPlay, actions = actions)
+                                }
+                                composable("playlist/{id}", listOf(navArgument("id") { type = NavType.LongType })) { e ->
                                         val id = e.arguments?.getLong("id") ?: 0
                                         val tracks by remember(id) { playlistRepo.tracksOf(id) }.collectAsState(emptyList())
                                         PlaylistScreen(

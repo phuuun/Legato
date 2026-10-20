@@ -5,6 +5,7 @@ import com.phuuun.legato.library.db.Playlist
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 
 /**
  * Playlists hold MediaStore ids. A row whose file is gone is skipped on load and pruned on the next write,
@@ -49,6 +50,10 @@ class PlaylistRepository(private val db: LegatoDb, private val library: LibraryR
     }
 
     suspend fun recordPlay(trackId: Long, now: Long) = db.stats().recordPlay(trackId, now)
+
+    /** Ids of tracks played to the end: most often first, or most recent first. */
+    fun playedIds(byRecent: Boolean): Flow<List<Long>> =
+        (if (byRecent) db.stats().byRecent() else db.stats().byPlays()).map { stats -> stats.map { it.mediaStoreId } }
 
     private suspend fun edit(playlistId: Long, change: (MutableList<Long>) -> Unit) {
         val live = library.tracks.first().mapTo(HashSet()) { it.id }
