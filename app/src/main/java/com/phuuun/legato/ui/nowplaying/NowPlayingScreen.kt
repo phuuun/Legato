@@ -1,5 +1,6 @@
 package com.phuuun.legato.ui.nowplaying
 
+import android.os.Build
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -52,6 +53,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.style.TextOverflow
@@ -74,56 +76,63 @@ fun NowPlayingSheet(state: NowPlayingState, vm: NowPlayingViewModel, onDismiss: 
         shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp),
         dragHandle = null,
     ) {
-        Column(Modifier.fillMaxSize().safeDrawingPadding().padding(horizontal = 24.dp)) {
-            Box(Modifier.fillMaxWidth().padding(top = 12.dp)) {
-                IconButton(onClick = { scope.launch { sheet.hide() }.invokeOnCompletion { onDismiss() } }, modifier = Modifier.align(Alignment.CenterStart)) {
-                    Icon(Icons.Rounded.KeyboardArrowDown, contentDescription = "Close")
-                }
-                Text("NOW PLAYING", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.align(Alignment.Center))
-                Row(Modifier.align(Alignment.CenterEnd)) {
-                    state.trackId?.let { id ->
-                        IconButton(onClick = { scope.launch { sheet.hide() }.invokeOnCompletion { onDismiss(); onEdit(id) } }) {
-                            Icon(Icons.Rounded.Edit, contentDescription = "Edit info")
-                        }
-                    }
-                    IconButton(onClick = { queueOpen = true }) { Icon(Icons.AutoMirrored.Rounded.QueueMusic, contentDescription = "Queue") }
-                }
+        Box(Modifier.fillMaxSize()) {
+            // The cover, blurred and washed over with the background, tints the whole player. Blur needs Android 12.
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                Artwork(state.artUri, Modifier.matchParentSize().blur(80.dp))
+                Box(Modifier.matchParentSize().background(MaterialTheme.colorScheme.background.copy(alpha = 0.7f)))
             }
-            Spacer(Modifier.weight(1f))
-            Artwork(state.artUri, Modifier.fillMaxWidth().aspectRatio(1f).clip(RoundedCornerShape(12.dp)))
-            Spacer(Modifier.weight(1f))
-            Text(state.title, style = MaterialTheme.typography.headlineSmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
-            Text(state.artist, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Seek(state, vm::seekTo)
-            if (state.isAudiobook) GoBack(vm)
-            Row(Modifier.fillMaxWidth().padding(vertical = 16.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                Toggle(Icons.Rounded.Shuffle, "Shuffle", state.shuffle, vm::toggleShuffle)
-                // A book skips 10 s instead of chapters; the queue still lists the chapters.
-                if (state.isAudiobook) {
-                    IconButton(onClick = vm::skipBack, modifier = Modifier.size(56.dp)) { Icon(Icons.Rounded.Replay10, "Back 10 seconds", Modifier.size(36.dp)) }
-                } else {
-                    IconButton(onClick = vm::previous, modifier = Modifier.size(56.dp)) { Icon(Icons.Rounded.SkipPrevious, "Previous", Modifier.size(36.dp)) }
+            Column(Modifier.fillMaxSize().safeDrawingPadding().padding(horizontal = 24.dp)) {
+                Box(Modifier.fillMaxWidth().padding(top = 12.dp)) {
+                    IconButton(onClick = { scope.launch { sheet.hide() }.invokeOnCompletion { onDismiss() } }, modifier = Modifier.align(Alignment.CenterStart)) {
+                        Icon(Icons.Rounded.KeyboardArrowDown, contentDescription = "Close")
+                    }
+                    Text("NOW PLAYING", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.align(Alignment.Center))
+                    Row(Modifier.align(Alignment.CenterEnd)) {
+                        state.trackId?.let { id ->
+                            IconButton(onClick = { scope.launch { sheet.hide() }.invokeOnCompletion { onDismiss(); onEdit(id) } }) {
+                                Icon(Icons.Rounded.Edit, contentDescription = "Edit info")
+                            }
+                        }
+                        IconButton(onClick = { queueOpen = true }) { Icon(Icons.AutoMirrored.Rounded.QueueMusic, contentDescription = "Queue") }
+                    }
                 }
-                IconButton(
-                    onClick = vm::togglePlay,
-                    modifier = Modifier.size(72.dp).clip(CircleShape).background(MaterialTheme.colorScheme.onBackground),
-                ) {
-                    Icon(
-                        if (state.isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow, if (state.isPlaying) "Pause" else "Play",
-                        Modifier.size(40.dp), tint = MaterialTheme.colorScheme.background,
+                Spacer(Modifier.weight(1f))
+                Artwork(state.artUri, Modifier.fillMaxWidth().aspectRatio(1f).clip(RoundedCornerShape(12.dp)))
+                Spacer(Modifier.weight(1f))
+                Text(state.title, style = MaterialTheme.typography.headlineSmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                Text(state.artist, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Seek(state, vm::seekTo)
+                if (state.isAudiobook) GoBack(vm)
+                Row(Modifier.fillMaxWidth().padding(vertical = 16.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                    Toggle(Icons.Rounded.Shuffle, "Shuffle", state.shuffle, vm::toggleShuffle)
+                    // A book skips 10 s instead of chapters; the queue still lists the chapters.
+                    if (state.isAudiobook) {
+                        IconButton(onClick = vm::skipBack, modifier = Modifier.size(56.dp)) { Icon(Icons.Rounded.Replay10, "Back 10 seconds", Modifier.size(36.dp)) }
+                    } else {
+                        IconButton(onClick = vm::previous, modifier = Modifier.size(56.dp)) { Icon(Icons.Rounded.SkipPrevious, "Previous", Modifier.size(36.dp)) }
+                    }
+                    IconButton(
+                        onClick = vm::togglePlay,
+                        modifier = Modifier.size(72.dp).clip(CircleShape).background(MaterialTheme.colorScheme.onBackground),
+                    ) {
+                        Icon(
+                            if (state.isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow, if (state.isPlaying) "Pause" else "Play",
+                            Modifier.size(40.dp), tint = MaterialTheme.colorScheme.background,
+                        )
+                    }
+                    if (state.isAudiobook) {
+                        IconButton(onClick = vm::skipForward, modifier = Modifier.size(56.dp)) { Icon(Icons.Rounded.Forward10, "Forward 10 seconds", Modifier.size(36.dp)) }
+                    } else {
+                        IconButton(onClick = vm::next, modifier = Modifier.size(56.dp)) { Icon(Icons.Rounded.SkipNext, "Next", Modifier.size(36.dp)) }
+                    }
+                    Toggle(
+                        if (state.repeatMode == Player.REPEAT_MODE_ONE) Icons.Rounded.RepeatOne else Icons.Rounded.Repeat, "Repeat",
+                        state.repeatMode != Player.REPEAT_MODE_OFF, vm::cycleRepeat,
                     )
                 }
-                if (state.isAudiobook) {
-                    IconButton(onClick = vm::skipForward, modifier = Modifier.size(56.dp)) { Icon(Icons.Rounded.Forward10, "Forward 10 seconds", Modifier.size(36.dp)) }
-                } else {
-                    IconButton(onClick = vm::next, modifier = Modifier.size(56.dp)) { Icon(Icons.Rounded.SkipNext, "Next", Modifier.size(36.dp)) }
-                }
-                Toggle(
-                    if (state.repeatMode == Player.REPEAT_MODE_ONE) Icons.Rounded.RepeatOne else Icons.Rounded.Repeat, "Repeat",
-                    state.repeatMode != Player.REPEAT_MODE_OFF, vm::cycleRepeat,
-                )
+                Spacer(Modifier.height(24.dp))
             }
-            Spacer(Modifier.height(24.dp))
         }
     }
     if (queueOpen) vm.controller.value?.let { QueueSheet(it, onDismiss = { queueOpen = false }) }
