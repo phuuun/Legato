@@ -191,6 +191,11 @@ fun ConverterScreen(state: ConverterState, initialLink: String?, onInitialLinkUs
                 IconButton(onClick = { scope.launch { copied()?.let { link = it; load(it) } } }) { Icon(Icons.Rounded.ContentPaste, contentDescription = "Paste") }
             }
             Button(onClick = { load(link) }, enabled = link.isNotBlank() && fetch != Fetch.Loading, modifier = Modifier.padding(horizontal = 20.dp)) { Text("Fetch") }
+            Text(
+                "Only save what you have the right to keep: your own uploads, or recordings that are Creative Commons or public domain.",
+                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
+            )
         }
         item {
             when (val f = fetch) {
