@@ -13,16 +13,33 @@ android {
         minSdk = 30
         targetSdk = 37
         versionCode = 1
-        versionName = "1.0"
+        versionName = "1.0.0"
         // TagLib is native; this phone is 64-bit ARM, and every other ABI is dead weight in the APK.
         ndk { abiFilters += "arm64-v8a" }
     }
 
+    // The release key lives outside the repo; its path and password come from ~/.gradle/gradle.properties.
+    // Without them (anyone else building this) release builds come out unsigned.
+    val storeFile = providers.gradleProperty("LEGATO_STORE_FILE").orNull
+    val legatoKey = storeFile?.let {
+        signingConfigs.create("legato") {
+            this.storeFile = file(it)
+            storePassword = providers.gradleProperty("LEGATO_STORE_PASSWORD").get()
+            keyAlias = providers.gradleProperty("LEGATO_KEY_ALIAS").get()
+            keyPassword = storePassword
+        }
+    }
+
     buildTypes {
         release {
-            isMinifyEnabled = false
-            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"))
+            // R8 drops unused code and resources (the debug APK is ~75 MB); keep rules in proguard-rules.pro.
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            signingConfig = legatoKey
         }
+        // Same key for debug, so a dev build installs over the release (and back) without wiping the app's data.
+        debug { legatoKey?.let { signingConfig = it } }
     }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11
