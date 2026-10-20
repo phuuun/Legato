@@ -1,5 +1,6 @@
 package com.phuuun.legato.library.edit
 
+import com.phuuun.legato.library.Track
 import kotlin.math.roundToInt
 
 data class MusicEdit(val title: String, val artists: List<String>, val album: String)
@@ -22,6 +23,13 @@ fun BookEdit.properties(): Map<String, String> = mapOf(
     "ALBUMARTIST" to author.trim(),
     "COMPOSER" to narrator.trim(),
 )
+
+/**
+ * A new album order as tags: track numbers 1…n, for the tracks whose number changes. The disc number goes, so
+ * the numbers alone decide (MediaStore counts disc 1 track 3 as 1003).
+ */
+fun renumber(ordered: List<Track>): List<Pair<Track, Map<String, String>>> =
+    ordered.mapIndexedNotNull { i, t -> if (t.trackNumber == i + 1) null else t to mapOf("TRACKNUMBER" to "${i + 1}", "DISCNUMBER" to "") }
 
 sealed interface CoverChange {
     data object Keep : CoverChange

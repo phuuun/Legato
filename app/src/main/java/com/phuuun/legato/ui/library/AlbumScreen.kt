@@ -1,5 +1,6 @@
 package com.phuuun.legato.ui.library
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -8,6 +9,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -16,9 +18,11 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.rounded.DragHandle
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Shuffle
 import androidx.compose.material3.Button
@@ -27,7 +31,14 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.dp
@@ -36,6 +47,7 @@ import com.phuuun.legato.library.Album
 import com.phuuun.legato.library.Artist
 import com.phuuun.legato.library.Track
 import com.phuuun.legato.ui.components.Artwork
+import com.phuuun.legato.ui.components.rememberReorder
 
 @Composable
 fun Back(onBack: () -> Unit) =
@@ -55,8 +67,14 @@ fun PlayShuffle(tracks: List<Track>, onPlay: (List<Track>, Int) -> Unit, modifie
     }
 }
 
+private val RowHeight = 64.dp
+
+/** [onReorder] set: an Edit order button, drag the grips, Save hands back the new order. */
 @Composable
-fun AlbumScreen(album: Album?, onBack: () -> Unit, onPlay: (List<Track>, Int) -> Unit, actions: TrackActions, header: @Composable () -> Unit = {}) {
+fun AlbumScreen(album: Album?, onBack: () -> Unit, onPlay: (List<Track>, Int) -> Unit, actions: TrackActions, onReorder: ((List<Track>) -> Unit)? = null, header: @Composable () -> Unit = {}) {
+    var editing by remember { mutableStateOf(false) }
+    val order = remember { mutableStateListOf<Track>() }
+    val reorder = rememberReorder(RowHeight) { from, to -> order.add(to.coerceIn(0, order.lastIndex), order.removeAt(from)) }
     Column(Modifier.screen()) {
         Back(onBack)
         if (album == null) { Empty("Album not found", "It may have been deleted."); return }
@@ -67,9 +85,25 @@ fun AlbumScreen(album: Album?, onBack: () -> Unit, onPlay: (List<Track>, Int) ->
                     Text(album.title, style = MaterialTheme.typography.headlineSmall, modifier = Modifier.padding(top = 16.dp))
                     Text(album.artist, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     header()
+                    if (onReorder != null) Row(Modifier.padding(top = 4.dp)) {
+                        if (!editing) TextButton(onClick = { order.clear(); order += album.tracks; editing = true }) { Text("Edit order") }
+                        else {
+                            TextButton(onClick = { onReorder(order.toList()); editing = false }) { Text("Save") }
+                            TextButton(onClick = { editing = false }) { Text("Cancel") }
+                        }
+                    }
                 }
             }
-            items(album.tracks, key = { it.id }) { t -> SongRow(t, onClick = { onPlay(album.tracks, album.tracks.indexOf(t)) }, actions = actions) }
+            if (editing) itemsIndexed(order, key = { _, t -> t.id }) { pos, t ->
+                Row(
+                    Modifier.fillMaxWidth().height(RowHeight).then(reorder.row(pos)).background(MaterialTheme.colorScheme.background),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    SongRow(t, onClick = {}, actions = actions, modifier = Modifier.weight(1f))
+                    Icon(Icons.Rounded.DragHandle, "Reorder", tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(48.dp).then(reorder.handle(pos)).padding(12.dp))
+                }
+            }
+            else items(album.tracks, key = { it.id }) { t -> SongRow(t, onClick = { onPlay(album.tracks, album.tracks.indexOf(t)) }, actions = actions) }
         }
     }
 }

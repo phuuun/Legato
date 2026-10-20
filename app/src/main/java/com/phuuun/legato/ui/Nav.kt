@@ -72,6 +72,7 @@ import com.phuuun.legato.library.edit.CoverChange
 import com.phuuun.legato.library.edit.TagWriter
 import com.phuuun.legato.library.edit.fixRows
 import com.phuuun.legato.library.edit.properties
+import com.phuuun.legato.library.edit.renumber
 import com.phuuun.legato.library.groupBooks
 import com.phuuun.legato.library.LibraryRepository
 import com.phuuun.legato.library.PlaylistRepository
@@ -343,7 +344,15 @@ fun LegatoNav(library: LibraryRepository, audiobooks: LibraryRepository, player:
                                     composable("album/{id}", listOf(navArgument("id") { type = NavType.LongType })) { e ->
                                         val id = e.arguments?.getLong("id")
                                         val album = state.albums.firstOrNull { it.id == id }
-                                        AlbumScreen(album, onBack = { musicNav.popBackStack() }, onPlay = onPlay, actions = actions) {
+                                        // A new order goes into the files as track numbers; MediaStore's re-read shows it.
+                                        val saveOrder = { tracks: List<Track> ->
+                                            scope.launch {
+                                                val failed = renumber(tracks).count { (t, p) -> !tagWriter.write(t, p, CoverChange.Keep) }
+                                                toast(if (failed == 0) "Order saved" else "Couldn't save $failed of the tracks")
+                                            }
+                                            Unit
+                                        }
+                                        AlbumScreen(album, onBack = { musicNav.popBackStack() }, onPlay = onPlay, actions = actions, onReorder = saveOrder) {
                                             if (album != null) PlayShuffle(album.tracks, onPlay, Modifier.padding(top = 12.dp))
                                         }
                                     }
