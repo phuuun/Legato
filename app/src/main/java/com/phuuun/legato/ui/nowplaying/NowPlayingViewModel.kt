@@ -9,9 +9,12 @@ import androidx.media3.common.util.UnstableApi
 import androidx.media3.common.util.Util
 import androidx.media3.session.MediaController
 import com.phuuun.legato.playback.coverUri
+import com.phuuun.legato.playback.isAudiobook
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.callbackFlow
@@ -19,6 +22,7 @@ import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.transformLatest
+import kotlinx.coroutines.launch
 
 data class NowPlayingState(
     val title: String,
@@ -30,7 +34,11 @@ data class NowPlayingState(
     val shuffle: Boolean,
     val repeatMode: Int,
     val trackId: Long?,
+    val isAudiobook: Boolean,
 )
+
+/** Where a book was before a jump: the chapter's queue index and the spot in it. */
+data class BackSpot(val index: Int, val positionMs: Long)
 
 /** Null state means nothing is queued, so the mini player hides. */
 @OptIn(UnstableApi::class)
@@ -56,7 +64,7 @@ class NowPlayingViewModel(val controller: StateFlow<MediaController?>) : ViewMod
         return NowPlayingState(
             m.title?.toString().orEmpty(), m.artist?.toString().orEmpty(), item.coverUri(),
             currentPosition, duration, !Util.shouldShowPlayButton(this), shuffleModeEnabled, repeatMode,
-            currentMediaItem?.mediaId?.toLongOrNull(),
+            currentMediaItem?.mediaId?.toLongOrNull(), item.isAudiobook,
         )
     }
 
@@ -66,7 +74,31 @@ class NowPlayingViewModel(val controller: StateFlow<MediaController?>) : ViewMod
     fun togglePlay() { c?.let { Util.handlePlayPauseButtonAction(it) } }
     fun next() { c?.seekToNext() }
     fun previous() { c?.seekToPrevious() }
-    fun seekTo(ms: Long) { c?.seekTo(ms) }
+    fun seekTo(ms: Long) = jump { seekTo(ms) }
+    fun skipBack() = jump { seekBack() }
+    fun skipForward() = jump { seekForward() }
+
+    // In a book, any jump offers the way back to where it started, like Storytel. Jumps in a row keep the first
+    // spot, and each one restarts the 5 s before the offer fades.
+    private val _backSpot = MutableStateFlow<BackSpot?>(null)
+    val backSpot: StateFlow<BackSpot?> = _backSpot
+    private var fade: Job? = null
+
+    private fun jump(seek: MediaController.() -> Unit) {
+        val c = c ?: return
+        if (c.currentMediaItem?.isAudiobook == true) {
+            if (_backSpot.value == null) _backSpot.value = BackSpot(c.currentMediaItemIndex, c.currentPosition)
+            fade?.cancel()
+            fade = viewModelScope.launch { delay(5_000); _backSpot.value = null }
+        }
+        c.seek()
+    }
+
+    fun goBack() {
+        _backSpot.value?.let { c?.seekTo(it.index, it.positionMs) }
+        fade?.cancel()
+        _backSpot.value = null
+    }
     fun toggleShuffle() { c?.run { shuffleModeEnabled = !shuffleModeEnabled } }
     fun cycleRepeat() {
         c?.run {
