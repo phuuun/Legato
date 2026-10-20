@@ -93,7 +93,9 @@ import com.phuuun.legato.ui.playlists.AddToPlaylistSheet
 import com.phuuun.legato.ui.playlists.PlaylistScreen
 import com.phuuun.legato.ui.playlists.PlaylistsList
 import com.phuuun.legato.ui.settings.FoldersPane
+import com.phuuun.legato.ui.settings.HiddenFiles
 import com.phuuun.legato.ui.library.PlayShuffle
+import com.phuuun.legato.library.inFolders
 import com.phuuun.legato.ui.settings.SettingsScreen
 import com.phuuun.legato.ui.settings.SettingsSection
 import kotlinx.coroutines.launch
@@ -170,6 +172,7 @@ fun LegatoNav(library: LibraryRepository, audiobooks: LibraryRepository, player:
             queue = { tracks, next -> player.queue(tracks, next); toast(if (next) "Playing next" else "Added to queue") },
             addToPlaylist = { adding = it },
             edit = { root.navigate("edit/${it.id}") },
+            hide = { tracks -> folders.hide(tracks.map { it.path }); toast("Hidden. Unhide it in Settings.") },
         )
     }
 
@@ -249,16 +252,22 @@ fun LegatoNav(library: LibraryRepository, audiobooks: LibraryRepository, player:
                     when (section) {
                         SettingsSection.Music -> {
                             val f by remember { folders.folders(FolderKind.Music) }.collectAsState(emptySet())
+                            val hidden by remember { folders.hidden }.collectAsState(emptySet())
                             FoldersPane(f, "Only files directly in these folders show up. With no folders, all music shows.", { folders.add(FolderKind.Music, it) }, { folders.remove(FolderKind.Music, it) }) {
                                 Text(
                                     "Fix unknown artists (${state.tracks.count { it.artists.isEmpty() }})", style = MaterialTheme.typography.bodyLarge,
                                     modifier = Modifier.fillMaxWidth().clickable { root.navigate("fix") }.padding(horizontal = 16.dp, vertical = 12.dp),
                                 )
+                                // Anything not in an audiobook folder counts as music here.
+                                HiddenFiles(hidden.filterNot { inFolders(it, audiobookFolders) }, folders::unhide)
                             }
                         }
                         SettingsSection.Audiobooks -> {
                             val f by remember { folders.folders(FolderKind.Audiobooks) }.collectAsState(emptySet())
-                            FoldersPane(f, null, { folders.add(FolderKind.Audiobooks, it) }, { folders.remove(FolderKind.Audiobooks, it) })
+                            val hidden by remember { folders.hidden }.collectAsState(emptySet())
+                            FoldersPane(f, null, { folders.add(FolderKind.Audiobooks, it) }, { folders.remove(FolderKind.Audiobooks, it) }) {
+                                HiddenFiles(hidden.filter { inFolders(it, f) }, folders::unhide)
+                            }
                         }
                         SettingsSection.Converter -> Text("Downloads go to the folder you pick in the Converter. Add more folders under Music and Audiobooks.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(20.dp))
                     }

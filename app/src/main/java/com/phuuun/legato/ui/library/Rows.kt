@@ -33,7 +33,7 @@ import com.phuuun.legato.library.Track
 import com.phuuun.legato.ui.components.Artwork
 
 /** What a long-press can do with a song or a whole album. `next` = true plays right after the current track, false appends. */
-class TrackActions(val queue: (List<Track>, next: Boolean) -> Unit, val addToPlaylist: (List<Track>) -> Unit, val edit: (Track) -> Unit)
+class TrackActions(val queue: (List<Track>, next: Boolean) -> Unit, val addToPlaylist: (List<Track>) -> Unit, val edit: (Track) -> Unit, val hide: (List<Track>) -> Unit)
 
 @Composable
 private fun TrackMenu(open: Boolean, onDismiss: () -> Unit, tracks: List<Track>, actions: TrackActions) =
@@ -42,6 +42,7 @@ private fun TrackMenu(open: Boolean, onDismiss: () -> Unit, tracks: List<Track>,
         DropdownMenuItem(text = { Text("Add to queue") }, onClick = { actions.queue(tracks, false); onDismiss() })
         DropdownMenuItem(text = { Text("Add to playlist…") }, onClick = { actions.addToPlaylist(tracks); onDismiss() })
         if (tracks.size == 1) DropdownMenuItem(text = { Text("Edit info…") }, onClick = { actions.edit(tracks.single()); onDismiss() })
+        DropdownMenuItem(text = { Text("Hide from library") }, onClick = { actions.hide(tracks); onDismiss() })
     }
 
 @OptIn(ExperimentalFoundationApi::class)

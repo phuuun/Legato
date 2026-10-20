@@ -17,23 +17,34 @@ enum class FolderKind(val key: String, val lastKey: String) {
 /** What a scope shows before any folder is chosen: music falls back to everything, audiobooks to nothing. */
 enum class WhenEmpty { AllMusic, Nothing }
 
+private const val HIDDEN = "hidden_files"
+
 /** Chosen folders, stored as MediaStore relative paths with a trailing slash ("Download/MUSIC/"). */
 class FolderStore(context: Context) {
     private val prefs: SharedPreferences = context.getSharedPreferences("settings", Context.MODE_PRIVATE)
 
     // A copy: the set SharedPreferences hands out must never be modified or kept.
-    private fun read(kind: FolderKind): Set<String> = prefs.getStringSet(kind.key, emptySet())!!.toSet()
+    private fun read(key: String): Set<String> = prefs.getStringSet(key, emptySet())!!.toSet()
 
-    fun folders(kind: FolderKind): Flow<Set<String>> = callbackFlow {
-        val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, key -> if (key == kind.key) trySend(read(kind)) }
+    private fun watch(key: String): Flow<Set<String>> = callbackFlow {
+        val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, k -> if (k == key) trySend(read(key)) }
         prefs.registerOnSharedPreferenceChangeListener(listener)
-        trySend(read(kind))
+        trySend(read(key))
         awaitClose { prefs.unregisterOnSharedPreferenceChangeListener(listener) }
     }.distinctUntilChanged()
 
-    fun add(kind: FolderKind, path: String) = prefs.edit { putStringSet(kind.key, read(kind) + path) }
+    fun folders(kind: FolderKind): Flow<Set<String>> = watch(kind.key)
 
-    fun remove(kind: FolderKind, path: String) = prefs.edit { putStringSet(kind.key, read(kind) - path) }
+    fun add(kind: FolderKind, path: String) = prefs.edit { putStringSet(kind.key, read(kind.key) + path) }
+
+    fun remove(kind: FolderKind, path: String) = prefs.edit { putStringSet(kind.key, read(kind.key) - path) }
+
+    /** Files hidden from the library, by full path. They stay on disk, and in any playlist that has them. */
+    val hidden: Flow<Set<String>> get() = watch(HIDDEN)
+
+    fun hide(paths: Collection<String>) = prefs.edit { putStringSet(HIDDEN, read(HIDDEN) + paths) }
+
+    fun unhide(path: String) = prefs.edit { putStringSet(HIDDEN, read(HIDDEN) - path) }
 
     /** The folder the converter last saved this kind into. */
     fun lastFolder(kind: FolderKind): String? = prefs.getString(kind.lastKey, null)
@@ -55,4 +66,10 @@ fun audioSelection(folders: Set<String>, whenEmpty: WhenEmpty): Pair<String, Arr
         "${MediaStore.Audio.Media.RELATIVE_PATH} IN (${folders.joinToString(",") { "?" }}) AND ${MediaStore.Audio.Media.DURATION} > 0" to folders.sorted().toTypedArray()
     whenEmpty == WhenEmpty.AllMusic -> "${MediaStore.Audio.Media.IS_MUSIC} != 0 AND ${MediaStore.Audio.Media.DURATION} > 0" to emptyArray()
     else -> null
+}
+
+/** Whether the file at [path] ("/storage/emulated/0/Music/a.mp3") sits directly in one of [folders] ("Music/"). */
+fun inFolders(path: String, folders: Set<String>): Boolean {
+    val parent = path.substringBeforeLast('/') + "/"
+    return folders.any { parent.endsWith("/$it") }
 }

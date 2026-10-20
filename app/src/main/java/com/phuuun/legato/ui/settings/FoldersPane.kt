@@ -6,6 +6,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -39,6 +40,21 @@ fun rememberFolderPicker(onPicked: (String) -> Unit): () -> Unit {
         if (path == null) Toast.makeText(context, "Only internal storage for now", Toast.LENGTH_SHORT).show() else latest(path)
     }
     return { launcher.launch(null) }
+}
+
+/** Files hidden from the library, each with a ✕ to bring it back. Nothing shows when none are hidden. */
+@Composable
+fun HiddenFiles(paths: List<String>, onUnhide: (String) -> Unit) {
+    if (paths.isEmpty()) return
+    Column {
+        Text("HIDDEN", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(start = 16.dp, top = 16.dp, bottom = 4.dp))
+        paths.sortedBy { it.substringAfterLast('/').lowercase() }.forEach { p ->
+            Row(Modifier.fillMaxWidth().padding(start = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text(p.substringAfterLast('/'), style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
+                IconButton(onClick = { onUnhide(p) }) { Icon(Icons.Rounded.Close, contentDescription = "Unhide ${p.substringAfterLast('/')}", tint = MaterialTheme.colorScheme.onSurfaceVariant) }
+            }
+        }
+    }
 }
 
 /** A section's folders: each with a ✕, then "Add folder" through Android's folder picker. */

@@ -47,4 +47,20 @@ class FoldersTest {
         assertEquals(emptySet<String>(), store.folders(FolderKind.Music).first())
         assertEquals(setOf("Audiobooks/"), store.folders(FolderKind.Audiobooks).first())
     }
+
+    @Test
+    fun hidden_files_round_trip() = runTest {
+        val store = FolderStore(ApplicationProvider.getApplicationContext())
+        store.hide(listOf("/storage/emulated/0/Music/a.mp3", "/storage/emulated/0/Music/b.mp3"))
+        store.unhide("/storage/emulated/0/Music/a.mp3")
+        assertEquals(setOf("/storage/emulated/0/Music/b.mp3"), store.hidden.first())
+    }
+
+    @Test
+    fun in_folders_matches_the_direct_parent_only() {
+        val books = setOf("Audiobooks/")
+        assertEquals(true, inFolders("/storage/emulated/0/Audiobooks/a.m4a", books))
+        assertEquals(false, inFolders("/storage/emulated/0/Audiobooks/Dune/a.m4a", books))
+        assertEquals(false, inFolders("/storage/emulated/0/MyAudiobooks/a.m4a", books))
+    }
 }

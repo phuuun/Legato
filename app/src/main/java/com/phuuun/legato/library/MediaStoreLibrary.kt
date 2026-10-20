@@ -11,13 +11,15 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.withContext
 
-/** One scope of the library: the tracks in [folders], or what [whenEmpty] says before any folder is chosen. */
-class MediaStoreLibrary(context: Context, folders: Flow<Set<String>>, private val whenEmpty: WhenEmpty) : LibraryRepository {
+/** One scope of the library: the tracks in [folders], or what [whenEmpty] says before any folder is chosen, less the [hidden] files. */
+class MediaStoreLibrary(context: Context, folders: Flow<Set<String>>, private val whenEmpty: WhenEmpty, hidden: Flow<Set<String>> = flowOf(emptySet())) : LibraryRepository {
     private val resolver: ContentResolver = context.applicationContext.contentResolver
     private val collection = MediaStore.Audio.Media.EXTERNAL_CONTENT_URI
 
@@ -32,7 +34,7 @@ class MediaStoreLibrary(context: Context, folders: Flow<Set<String>>, private va
             trySend(query(f))
             awaitClose { resolver.unregisterContentObserver(observer) }
         }
-    }.flowOn(Dispatchers.IO)
+    }.combine(hidden) { tracks, h -> if (h.isEmpty()) tracks else tracks.filterNot { it.path in h } }.flowOn(Dispatchers.IO)
 
     override suspend fun track(id: Long): Track? = withContext(Dispatchers.IO) { tracks.first().firstOrNull { it.id == id } }
 
