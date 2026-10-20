@@ -5,6 +5,7 @@ import coil3.ImageLoader
 import coil3.PlatformContext
 import coil3.SingletonImageLoader
 import com.phuuun.legato.converter.DownloadQueue
+import com.phuuun.legato.library.Backups
 import com.phuuun.legato.library.BookmarkStore
 import com.phuuun.legato.library.FolderKind
 import com.phuuun.legato.library.FolderStore
@@ -32,7 +33,9 @@ class LegatoApp : Application(), SingletonImageLoader.Factory {
 
     // Playlists resolve against all music, not the chosen folders or hidden files: neither may prune a playlist.
     private val allMusic: LibraryRepository by lazy { MediaStoreLibrary(this, flowOf(emptySet()), WhenEmpty.AllMusic) }
-    val playlists by lazy { PlaylistRepository(LegatoDb.open(this), allMusic) }
+    private val db by lazy { LegatoDb.open(this) }
+    val playlists by lazy { PlaylistRepository(db, allMusic) }
+    val backups by lazy { Backups(this, db, folders, progress, bookmarks) }
 
     override fun newImageLoader(context: PlatformContext): ImageLoader =
         ImageLoader.Builder(context).components { add(AudioCoverFetcher.Factory()); add(AudioCoverKeyer()) }.build()

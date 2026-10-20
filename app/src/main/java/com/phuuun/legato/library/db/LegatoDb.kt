@@ -5,6 +5,7 @@ import androidx.room.Dao
 import androidx.room.Database
 import androidx.room.Entity
 import androidx.room.Insert
+import androidx.room.OnConflictStrategy
 import androidx.room.PrimaryKey
 import androidx.room.Query
 import androidx.room.Room
@@ -82,6 +83,18 @@ abstract class StatsDao {
 
     @Query("SELECT * FROM play_stats WHERE mediaStoreId = :id")
     abstract suspend fun get(id: Long): PlayStat?
+
+    @Query("SELECT * FROM play_stats")
+    abstract suspend fun all(): List<PlayStat>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    abstract suspend fun put(stats: List<PlayStat>)
+
+    @Query("SELECT * FROM play_stats ORDER BY playCount DESC, lastPlayedAt DESC")
+    abstract fun byPlays(): Flow<List<PlayStat>>
+
+    @Query("SELECT * FROM play_stats ORDER BY lastPlayedAt DESC")
+    abstract fun byRecent(): Flow<List<PlayStat>>
 }
 
 @Database(entities = [Playlist::class, PlaylistTrack::class, PlayStat::class], version = 1, exportSchema = false)

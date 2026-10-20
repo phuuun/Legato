@@ -40,12 +40,16 @@ class FolderStore(context: Context) {
 
     fun remove(kind: FolderKind, path: String) = prefs.edit { putStringSet(kind.key, read(kind.key) - path) }
 
+    fun setFolders(kind: FolderKind, paths: Set<String>) = prefs.edit { putStringSet(kind.key, paths) }
+
     /** Files hidden from the library, by full path. They stay on disk, and in any playlist that has them. */
     val hidden: Flow<Set<String>> get() = watch(HIDDEN) { read(HIDDEN) }
 
     fun hide(paths: Collection<String>) = prefs.edit { putStringSet(HIDDEN, read(HIDDEN) + paths) }
 
     fun unhide(paths: Collection<String>) = prefs.edit { putStringSet(HIDDEN, read(HIDDEN) - paths.toSet()) }
+
+    fun setHidden(paths: Set<String>) = prefs.edit { putStringSet(HIDDEN, paths) }
 
     /** How songs, albums and books are ordered; one choice for both sections. */
     val sort: Flow<Sort> get() = watch(SORT) { Sort.entries.firstOrNull { it.name == prefs.getString(SORT, null) } ?: Sort.Title }

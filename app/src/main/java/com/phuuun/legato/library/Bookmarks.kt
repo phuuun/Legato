@@ -34,4 +34,6 @@ class BookmarkStore(context: Context) {
     fun save(b: Bookmark) = prefs.edit { putString(b.id.toString(), "${b.trackId}:${b.positionMs}:${b.color}:${b.caption}") }
 
     fun delete(id: Long) = prefs.edit { remove(id.toString()) }
+
+    fun clear() = prefs.edit { clear() }
 }

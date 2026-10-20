@@ -100,6 +100,14 @@ import com.phuuun.legato.library.inFolders
 import com.phuuun.legato.ui.settings.SettingsScreen
 import com.phuuun.legato.ui.settings.SettingsSection
 import kotlinx.coroutines.launch
+import android.text.format.DateUtils
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.TextButton
+import com.phuuun.legato.library.Backups
+import com.phuuun.legato.library.backupFromJson
+import com.phuuun.legato.ui.settings.BackupPane
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import androidx.compose.foundation.layout.Row
 import androidx.compose.material.icons.automirrored.rounded.Sort
 import androidx.compose.material.icons.rounded.Check
@@ -203,7 +211,7 @@ private fun SlidingNavHost(nav: NavHostController, start: String, modifier: Modi
  * Edit and Bulk fix are full screens above the pages.
  */
 @Composable
-fun LegatoNav(library: LibraryRepository, audiobooks: LibraryRepository, player: PlayerConnection, playlistRepo: PlaylistRepository, folders: FolderStore, tagWriter: TagWriter, progress: ProgressStore, bookmarks: BookmarkStore, downloads: DownloadQueue,
+fun LegatoNav(library: LibraryRepository, audiobooks: LibraryRepository, player: PlayerConnection, playlistRepo: PlaylistRepository, folders: FolderStore, tagWriter: TagWriter, progress: ProgressStore, bookmarks: BookmarkStore, backups: Backups, downloads: DownloadQueue,
     sharedLink: String?, onSharedLinkUsed: () -> Unit, openPlayer: Boolean, onPlayerOpened: () -> Unit,
 ) {
     val root = rememberNavController()
@@ -235,6 +243,26 @@ fun LegatoNav(library: LibraryRepository, audiobooks: LibraryRepository, player:
     }
     // A link shared to Legato jumps to the converter, which takes it from there.
     LaunchedEffect(sharedLink) { if (sharedLink != null) toSection(Section.Converter) }
+    // A backup from before this install is offered once; otherwise today's backup is made if it's due.
+    var offerRestore by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) { if (backups.offerRestore) offerRestore = true else backups.daily() }
+    val backUpNow = { done: () -> Unit ->
+        scope.launch { toast(if (runCatching { backups.backUp() }.isSuccess) "Backed up" else "Couldn't back up"); done() }
+        Unit
+    }
+    val restoreFrom = { uri: Uri?, done: () -> Unit ->
+        scope.launch {
+            val restored = runCatching {
+                val text = withContext(Dispatchers.IO) {
+                    if (uri == null) backups.file.readText() else context.contentResolver.openInputStream(uri)!!.use { it.reader().readText() }
+                }
+                backups.restore(backupFromJson(text))
+            }.isSuccess
+            toast(if (restored) "Restored" else "That file isn't a Legato backup")
+            done()
+        }
+        Unit
+    }
     // Tapping the playback notification opens the full player, over wherever the app was.
     LaunchedEffect(openPlayer) { if (openPlayer) { expanded = true; onPlayerOpened() } }
     // Null until the first scan lands, so the Audiobooks tab doesn't flash "No audiobooks" first.
@@ -396,7 +424,8 @@ fun LegatoNav(library: LibraryRepository, audiobooks: LibraryRepository, player:
                                     HiddenFiles(hidden.filter { inFolders(it, f) }) { folders.unhide(listOf(it)) }
                                 }
                             }
-                            SettingsSection.Converter -> Text("Downloads go to the folder you pick in the Converter. Add more folders under Music and Audiobooks.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(20.dp))
+                            SettingsSection.Backup -> BackupPane(backups, backUpNow, restoreFrom)
+                        SettingsSection.Converter -> Text("Downloads go to the folder you pick in the Converter. Add more folders under Music and Audiobooks.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(20.dp))
                         }
                     }
                 }
@@ -436,6 +465,13 @@ fun LegatoNav(library: LibraryRepository, audiobooks: LibraryRepository, player:
         }
     }
     now?.let { if (expanded) NowPlayingSheet(it, nowPlayingVm, onDismiss = { expanded = false }, onEdit = { id -> root.navigate("edit/$id") }) }
+    if (offerRestore) AlertDialog(
+        onDismissRequest = { offerRestore = false; backups.decline() },
+        title = { Text("Restore your backup?") },
+        text = { Text("There's a Legato backup from ${DateUtils.getRelativeTimeSpanString(backups.file.lastModified())} in Downloads: playlists, bookmarks, listening progress and folders.") },
+        confirmButton = { TextButton(onClick = { offerRestore = false; restoreFrom(null) {} }) { Text("Restore") } },
+        dismissButton = { TextButton(onClick = { offerRestore = false; backups.decline() }) { Text("Not now") } },
+    )
     adding?.let { tracks ->
         val ids = tracks.map { it.id }
         AddToPlaylistSheet(
