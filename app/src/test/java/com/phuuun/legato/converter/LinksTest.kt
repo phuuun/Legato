@@ -1,6 +1,8 @@
 package com.phuuun.legato.converter
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Assert.assertNull
 import org.junit.Test
 
@@ -29,5 +31,11 @@ class LinksTest {
     fun other_sites_are_rejected() {
         assertNull(parseYouTube("https://example.com/watch?v=dQw4w9WgXcQ"))
         assertNull(parseYouTube("hello"))
+    }
+
+    @Test
+    fun youtube_music_album_ids_are_albums() {
+        assertTrue(isAlbumPlaylist("OLAK5uy_kMnUWqPzN5UYp1vVjdHrlgdBnJcuHvAQk"))
+        assertFalse(isAlbumPlaylist("PLx0sYbCqOb8Q"))
     }
 }

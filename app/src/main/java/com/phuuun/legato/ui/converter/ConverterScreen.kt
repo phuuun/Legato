@@ -66,7 +66,10 @@ import com.phuuun.legato.converter.DownloadJob
 import com.phuuun.legato.converter.PickedVideo
 import com.phuuun.legato.converter.Playlist
 import com.phuuun.legato.converter.YouTubeLink
+import com.phuuun.legato.converter.albumJobs
 import com.phuuun.legato.converter.bookJobs
+import com.phuuun.legato.converter.guessAlbum
+import com.phuuun.legato.converter.isAlbumPlaylist
 import com.phuuun.legato.converter.musicJobs
 import com.phuuun.legato.converter.playlistUrl
 import com.phuuun.legato.converter.DownloadQueue
@@ -96,7 +99,8 @@ internal sealed interface Fetch {
     /** A video opened from inside a playlist: which one did they mean? */
     data class Ask(val link: YouTubeLink) : Fetch
     data class One(val video: Video) : Fetch
-    data class Many(val playlist: Playlist) : Fetch
+    /** [album]: a YouTube Music album, so the preview opens on ALBUM. */
+    data class Many(val playlist: Playlist, val album: Boolean) : Fetch
 }
 
 /**
@@ -123,7 +127,7 @@ class ConverterState(private val scope: CoroutineScope) {
                 val playlist = YouTube.playlist(playlistUrl(id))
                 picks.clear()
                 picks += playlist.videos.map { v -> guessSong(v.title, v.uploader).let { PickedVideo(v, it.artist, it.title, true) } }
-                Fetch.Many(playlist)
+                Fetch.Many(playlist, isAlbumPlaylist(id))
             } catch (e: Exception) {
                 Fetch.Error(e.message ?: "Couldn't load that playlist")
             }
@@ -221,7 +225,7 @@ fun ConverterScreen(state: ConverterState, initialLink: String?, onInitialLinkUs
                 is Fetch.Many -> Unit
             }
         }
-        (fetch as? Fetch.Many)?.let { playlist(it.playlist, picks, folders, downloads) { batch, kind -> queue(batch, kind) } }
+        (fetch as? Fetch.Many)?.let { playlist(it.playlist, it.album, picks, folders, downloads) { batch, kind -> queue(batch, kind) } }
         if (jobs.isNotEmpty()) {
             item {
                 Row(Modifier.fillMaxWidth().padding(start = 20.dp, end = 8.dp, top = 16.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -290,12 +294,15 @@ private fun KindToggle(kind: FolderKind, onKind: (FolderKind) -> Unit) =
         }
     }
 
+/** What a playlist becomes: loose songs, one album, or one audiobook. */
+private enum class PlaylistAs(val label: String, val kind: FolderKind) { Songs("MUSIC", FolderKind.Music), Album("ALBUM", FolderKind.Music), Book("AUDIOBOOK", FolderKind.Audiobooks) }
+
 /**
- * A playlist as list items: header with MUSIC / AUDIOBOOK, one row per video (ticked, with its guess for
- * music), then where to save and "Download N". An audiobook playlist is one book: one title for all.
+ * A playlist as list items: header with MUSIC / ALBUM / AUDIOBOOK, one row per video (ticked, with its guess for
+ * music), then where to save and "Download N". An album or audiobook playlist is one album or book: one title for all.
  */
 private fun LazyListScope.playlist(
-    playlist: Playlist, picks: SnapshotStateList<PickedVideo>, folders: FolderStore, downloads: DownloadQueue, onDownload: (List<DownloadJob>, FolderKind) -> Unit,
+    playlist: Playlist, album: Boolean, picks: SnapshotStateList<PickedVideo>, folders: FolderStore, downloads: DownloadQueue, onDownload: (List<DownloadJob>, FolderKind) -> Unit,
 ) {
     item(key = "playlist-head") {
         Column(Modifier.padding(horizontal = 20.dp, vertical = 8.dp)) {
@@ -303,12 +310,16 @@ private fun LazyListScope.playlist(
             Text("${playlist.videos.size} videos", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
-    item(key = "playlist-form") { PlaylistForm(playlist, picks, folders, downloads, onDownload) }
+    item(key = "playlist-form") { PlaylistForm(playlist, album, picks, folders, downloads, onDownload) }
 }
 
 @Composable
-private fun PlaylistForm(playlist: Playlist, picks: SnapshotStateList<PickedVideo>, folders: FolderStore, downloads: DownloadQueue, onDownload: (List<DownloadJob>, FolderKind) -> Unit) {
-    var kind by rememberSaveable { mutableStateOf(FolderKind.Music) }
+private fun PlaylistForm(playlist: Playlist, album: Boolean, picks: SnapshotStateList<PickedVideo>, folders: FolderStore, downloads: DownloadQueue, onDownload: (List<DownloadJob>, FolderKind) -> Unit) {
+    var mode by rememberSaveable(playlist) { mutableStateOf(if (album) PlaylistAs.Album else PlaylistAs.Songs) }
+    val kind = mode.kind
+    val albumGuess = remember(playlist) { guessAlbum(playlist.name, picks.map { it.artist }) }
+    var albumTitle by rememberSaveable(playlist) { mutableStateOf(albumGuess.title) }
+    var albumArtist by rememberSaveable(playlist) { mutableStateOf(albumGuess.artist) }
     val book = remember(playlist) { guessBook(playlist.name) }
     var bookTitle by rememberSaveable(playlist) { mutableStateOf(book.title) }
     var author by rememberSaveable(playlist) { mutableStateOf(book.author) }
@@ -318,7 +329,20 @@ private fun PlaylistForm(playlist: Playlist, picks: SnapshotStateList<PickedVide
     val ticked = picks.count { it.include }
 
     Column(Modifier.padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        KindToggle(kind) { kind = it }
+        Row(horizontalArrangement = Arrangement.spacedBy(20.dp)) {
+            PlaylistAs.entries.forEach { m ->
+                Text(
+                    m.label, style = MaterialTheme.typography.labelSmall,
+                    fontWeight = if (m == mode) FontWeight.Bold else FontWeight.Normal,
+                    color = if (m == mode) MaterialTheme.colorScheme.onBackground else MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.clickable { mode = m }.padding(vertical = 8.dp),
+                )
+            }
+        }
+        if (mode == PlaylistAs.Album) {
+            Field("Album", albumTitle) { albumTitle = it }
+            Field("Album artist", albumArtist) { albumArtist = it }
+        }
         if (kind == FolderKind.Audiobooks) {
             Field("Book title", bookTitle) { bookTitle = it }
             Field("Author", author) { author = it }
@@ -345,8 +369,11 @@ private fun PlaylistForm(playlist: Playlist, picks: SnapshotStateList<PickedVide
             onClick = {
                 val dest = folder ?: return@Button
                 onDownload(
-                    if (kind == FolderKind.Music) musicJobs(picks, dest, downloads.nextId())
-                    else bookJobs(picks.filter { it.include }.map { it.video }, bookTitle, author, narrator, dest, downloads.nextId()),
+                    when (mode) {
+                        PlaylistAs.Songs -> musicJobs(picks, dest, downloads.nextId())
+                        PlaylistAs.Album -> albumJobs(picks, albumTitle, albumArtist, dest, downloads.nextId())
+                        PlaylistAs.Book -> bookJobs(picks.filter { it.include }.map { it.video }, bookTitle, author, narrator, dest, downloads.nextId())
+                    },
                     kind,
                 )
             },

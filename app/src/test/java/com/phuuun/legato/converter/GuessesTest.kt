@@ -50,4 +50,26 @@ class GuessesTest {
         listOf("A - B.m4a"),
         musicJobs(listOf(PickedVideo(Video("u1", "x", "c", 1, null), "A", "B", true), PickedVideo(Video("u2", "y", "c", 1, null), "C", "D", false)), "Music/", 1).map { it.fileName },
     )
+
+    @Test
+    fun album_guess_drops_the_album_prefix_and_takes_the_usual_artist() {
+        assertEquals(AlbumGuess("Currents", "Tame Impala"), guessAlbum("Album - Currents", listOf("Tame Impala", "Tame Impala; Rihanna", "Tame Impala", "Other")))
+        assertEquals(AlbumGuess("Road trip", ""), guessAlbum("Road trip", emptyList()))
+    }
+
+    @Test
+    fun album_playlist_is_one_album_in_ticked_order_with_one_cover() {
+        val picks = listOf(
+            PickedVideo(Video("u1", "v1", "c", 60, "thumb1"), "A", "One", true),
+            PickedVideo(Video("u2", "v2", "c", 60, "thumb2"), "A", "Skipped", false),
+            PickedVideo(Video("u3", "v3", "c", 60, "thumb3"), "A; B", "Two", true),
+        )
+        val jobs = albumJobs(picks, "Currents", "Tame Impala", "Music/", 5)
+        assertEquals(listOf(5L, 6L), jobs.map { it.id })
+        assertEquals(listOf("One", "Two"), jobs.map { it.properties["TITLE"] })
+        assertEquals(listOf("1", "2"), jobs.map { it.properties["TRACKNUMBER"] })
+        assertEquals(setOf("Currents"), jobs.map { it.properties["ALBUM"] }.toSet())
+        assertEquals(setOf("Tame Impala"), jobs.map { it.properties["ALBUMARTIST"] }.toSet())
+        assertEquals(setOf("thumb1"), jobs.map { it.thumbnail }.toSet())
+    }
 }

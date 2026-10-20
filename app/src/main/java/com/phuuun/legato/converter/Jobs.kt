@@ -12,6 +12,16 @@ fun musicJobs(picked: List<PickedVideo>, folder: String, firstId: Long): List<Do
         DownloadJob(firstId + i, p.video.url, p.title, folder, musicFileName(p.artist, p.title), MusicEdit(p.title, listOf(p.artist), "").properties(), p.video.thumbnail)
     }
 
+/** One album for all: same album and album artist, numbered in playlist order, and the first video's thumbnail as every cover. */
+fun albumJobs(picked: List<PickedVideo>, album: String, albumArtist: String, folder: String, firstId: Long): List<DownloadJob> {
+    val ticked = picked.filter { it.include }
+    val cover = ticked.firstOrNull()?.video?.thumbnail
+    return ticked.mapIndexed { i, p ->
+        val properties = MusicEdit(p.title, listOf(p.artist), album).properties() + mapOf("ALBUMARTIST" to albumArtist.trim(), "TRACKNUMBER" to "${i + 1}")
+        DownloadJob(firstId + i, p.video.url, p.title, folder, musicFileName(p.artist, p.title), properties, cover)
+    }
+}
+
 /**
  * One video is a one-file book. Several are one book: they share the book title (ALBUM), keep their
  * video titles as chapter titles, and are numbered in order so the Audiobooks tab lists them that way.

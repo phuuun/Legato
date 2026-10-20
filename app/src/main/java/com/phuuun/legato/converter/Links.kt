@@ -24,6 +24,9 @@ fun parseYouTube(text: String): YouTubeLink? {
     return if (video == null && playlist == null) null else YouTubeLink(video, playlist)
 }
 
+/** YouTube Music's album pages are playlists with these ids. */
+fun isAlbumPlaylist(id: String) = id.startsWith("OLAK5uy_")
+
 fun videoUrl(id: String) = "https://www.youtube.com/watch?v=$id"
 
 fun playlistUrl(id: String) = "https://www.youtube.com/playlist?list=$id"

@@ -14,6 +14,14 @@ fun guessSong(title: String, uploader: String): Guess {
     return if (g.artist.isNotBlank()) g else Guess(uploader.trim().removeSuffix("VEVO").removeSuffix(" Official").trim(), g.title)
 }
 
+data class AlbumGuess(val title: String, val artist: String)
+
+/** YouTube Music names an album's playlist "Album - Title"; the album artist is whoever is on the most tracks. */
+fun guessAlbum(playlistName: String, artists: List<String>): AlbumGuess = AlbumGuess(
+    playlistName.removePrefix("Album - ").trim(),
+    artists.flatMap { it.split(';') }.map { it.trim() }.filter { it.isNotEmpty() }.groupingBy { it }.eachCount().maxByOrNull { it.value }?.key.orEmpty(),
+)
+
 data class BookGuess(val title: String, val author: String)
 
 private val bookJunk = Regex("""(?i)\b(full audiobook|audiobook|unabridged|complete)\b""")
