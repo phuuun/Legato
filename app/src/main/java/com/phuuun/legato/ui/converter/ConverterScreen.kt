@@ -55,7 +55,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -151,7 +151,9 @@ class ConverterState(private val scope: CoroutineScope) {
 @Composable
 fun ConverterScreen(state: ConverterState, initialLink: String?, onInitialLinkUsed: () -> Unit, folders: FolderStore, downloads: DownloadQueue) {
     val context = LocalContext.current
-    val clipboard = LocalClipboardManager.current
+    val clipboard = LocalClipboard.current
+    val scope = rememberCoroutineScope()
+    val copied = suspend { clipboard.getClipEntry()?.clipData?.takeIf { it.itemCount > 0 }?.getItemAt(0)?.text?.toString() }
     var link by state::link
     val fetch = state.fetch
     val picks = state.picks
@@ -166,7 +168,7 @@ fun ConverterScreen(state: ConverterState, initialLink: String?, onInitialLinkUs
     // Opening the tab with a YouTube link already copied offers it; the clipboard is only read here, never in the background.
     var suggestion by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(Unit) {
-        if (initialLink == null && link.isBlank()) suggestion = clipboard.getText()?.text?.takeIf { parseYouTube(it) != null }
+        if (initialLink == null && link.isBlank()) suggestion = copied()?.takeIf { parseYouTube(it) != null }
     }
 
     fun queue(batch: List<DownloadJob>, kind: FolderKind) {
@@ -186,7 +188,7 @@ fun ConverterScreen(state: ConverterState, initialLink: String?, onInitialLinkUs
                 Box(Modifier.weight(1f)) {
                     Field("YouTube link", link, onRemove = null) { link = it }
                 }
-                IconButton(onClick = { clipboard.getText()?.text?.let { link = it; load(it) } }) { Icon(Icons.Rounded.ContentPaste, contentDescription = "Paste") }
+                IconButton(onClick = { scope.launch { copied()?.let { link = it; load(it) } } }) { Icon(Icons.Rounded.ContentPaste, contentDescription = "Paste") }
             }
             Button(onClick = { load(link) }, enabled = link.isNotBlank() && fetch != Fetch.Loading, modifier = Modifier.padding(horizontal = 20.dp)) { Text("Fetch") }
         }
