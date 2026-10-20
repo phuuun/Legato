@@ -1,24 +1,34 @@
 package com.phuuun.legato.converter
 
+import com.phuuun.legato.library.Track
 import com.phuuun.legato.library.edit.BookEdit
 import com.phuuun.legato.library.edit.MusicEdit
 import com.phuuun.legato.library.edit.properties
 
-/** A video on the preview with its (edited) guess, and whether it's ticked. */
-data class PickedVideo(val video: Video, val artist: String, val title: String, val include: Boolean)
+/** A video on the preview with its (edited) guess, whether it's ticked, and whether it replaces the same song already on the phone. */
+data class PickedVideo(val video: Video, val artist: String, val title: String, val include: Boolean, val replace: Boolean = true)
 
-fun musicJobs(picked: List<PickedVideo>, folder: String, firstId: Long): List<DownloadJob> =
+/** A song already in [library] with the same title and the same artists, ignoring case and spacing. */
+fun findDuplicate(artist: String, title: String, library: List<Track>): Track? {
+    val names = artist.split(';').map { it.trim().lowercase() }.filter { it.isNotEmpty() }.toSet()
+    val t = title.trim().lowercase()
+    return library.firstOrNull { it.title.trim().lowercase() == t && it.artists.map { a -> a.lowercase() }.toSet() == names }
+}
+
+private fun PickedVideo.duplicateIn(library: List<Track>) = if (replace) findDuplicate(artist, title, library) else null
+
+fun musicJobs(picked: List<PickedVideo>, folder: String, firstId: Long, library: List<Track> = emptyList()): List<DownloadJob> =
     picked.filter { it.include }.mapIndexed { i, p ->
-        DownloadJob(firstId + i, p.video.url, p.title, folder, musicFileName(p.artist, p.title), MusicEdit(p.title, listOf(p.artist), "").properties(), p.video.thumbnail)
+        DownloadJob(firstId + i, p.video.url, p.title, folder, musicFileName(p.artist, p.title), MusicEdit(p.title, listOf(p.artist), "").properties(), p.video.thumbnail, p.duplicateIn(library))
     }
 
 /** One album for all: same album and album artist, numbered in playlist order, and the first video's thumbnail as every cover. */
-fun albumJobs(picked: List<PickedVideo>, album: String, albumArtist: String, folder: String, firstId: Long): List<DownloadJob> {
+fun albumJobs(picked: List<PickedVideo>, album: String, albumArtist: String, folder: String, firstId: Long, library: List<Track> = emptyList()): List<DownloadJob> {
     val ticked = picked.filter { it.include }
     val cover = ticked.firstOrNull()?.video?.thumbnail
     return ticked.mapIndexed { i, p ->
         val properties = MusicEdit(p.title, listOf(p.artist), album).properties() + mapOf("ALBUMARTIST" to albumArtist.trim(), "TRACKNUMBER" to "${i + 1}")
-        DownloadJob(firstId + i, p.video.url, p.title, folder, musicFileName(p.artist, p.title), properties, cover)
+        DownloadJob(firstId + i, p.video.url, p.title, folder, musicFileName(p.artist, p.title), properties, cover, p.duplicateIn(library))
     }
 }
 

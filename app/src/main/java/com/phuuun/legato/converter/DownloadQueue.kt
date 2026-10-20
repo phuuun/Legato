@@ -1,5 +1,7 @@
 package com.phuuun.legato.converter
 
+import com.phuuun.legato.library.Track
+
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
@@ -12,7 +14,7 @@ sealed interface JobState {
     data class Failed(val reason: String) : JobState
 }
 
-/** One file to make: which video, where it goes, what it's called, and the tags it gets. */
+/** One file to make: which video, where it goes, what it's called, the tags it gets, and the song it [replaces], if any. */
 data class DownloadJob(
     val id: Long,
     val videoUrl: String,
@@ -21,6 +23,7 @@ data class DownloadJob(
     val fileName: String,
     val properties: Map<String, String>,
     val thumbnail: String?,
+    val replaces: Track? = null,
     val state: JobState = JobState.Queued,
 )
 

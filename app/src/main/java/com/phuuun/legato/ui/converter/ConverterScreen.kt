@@ -68,6 +68,7 @@ import com.phuuun.legato.converter.Playlist
 import com.phuuun.legato.converter.YouTubeLink
 import com.phuuun.legato.converter.albumJobs
 import com.phuuun.legato.converter.bookJobs
+import com.phuuun.legato.converter.findDuplicate
 import com.phuuun.legato.converter.guessAlbum
 import com.phuuun.legato.converter.isAlbumPlaylist
 import com.phuuun.legato.converter.musicJobs
@@ -83,6 +84,7 @@ import com.phuuun.legato.converter.parseYouTube
 import com.phuuun.legato.converter.videoUrl
 import com.phuuun.legato.library.FolderKind
 import com.phuuun.legato.library.FolderStore
+import com.phuuun.legato.library.Track
 import com.phuuun.legato.ui.edit.Field
 import com.phuuun.legato.ui.nowplaying.formatTime
 import com.phuuun.legato.ui.settings.rememberFolderPicker
@@ -153,7 +155,7 @@ class ConverterState(private val scope: CoroutineScope) {
 
 /** Link in, preview with guessed tags, pick where it goes, download; the queue below shows what's happening. */
 @Composable
-fun ConverterScreen(state: ConverterState, initialLink: String?, onInitialLinkUsed: () -> Unit, folders: FolderStore, downloads: DownloadQueue) {
+fun ConverterScreen(state: ConverterState, initialLink: String?, onInitialLinkUsed: () -> Unit, folders: FolderStore, downloads: DownloadQueue, library: List<Track>) {
     val context = LocalContext.current
     val clipboard = LocalClipboard.current
     val scope = rememberCoroutineScope()
@@ -221,11 +223,11 @@ fun ConverterScreen(state: ConverterState, initialLink: String?, onInitialLinkUs
                         TextButton(onClick = { loadPlaylist(f.link.playlist!!) }) { Text("Whole playlist") }
                     }
                 }
-                is Fetch.One -> VideoCard(f.video, folders, downloads) { batch, kind -> queue(batch, kind) }
+                is Fetch.One -> VideoCard(f.video, folders, downloads, library) { batch, kind -> queue(batch, kind) }
                 is Fetch.Many -> Unit
             }
         }
-        (fetch as? Fetch.Many)?.let { playlist(it.playlist, it.album, picks, folders, downloads) { batch, kind -> queue(batch, kind) } }
+        (fetch as? Fetch.Many)?.let { playlist(it.playlist, it.album, picks, folders, downloads, library) { batch, kind -> queue(batch, kind) } }
         if (jobs.isNotEmpty()) {
             item {
                 Row(Modifier.fillMaxWidth().padding(start = 20.dp, end = 8.dp, top = 16.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -239,7 +241,7 @@ fun ConverterScreen(state: ConverterState, initialLink: String?, onInitialLinkUs
 }
 
 @Composable
-private fun VideoCard(video: Video, folders: FolderStore, downloads: DownloadQueue, onDownload: (List<DownloadJob>, FolderKind) -> Unit) {
+private fun VideoCard(video: Video, folders: FolderStore, downloads: DownloadQueue, library: List<Track>, onDownload: (List<DownloadJob>, FolderKind) -> Unit) {
     var kind by rememberSaveable { mutableStateOf(FolderKind.Music) }
     val song = remember(video) { guessSong(video.title, video.uploader) }
     val book = remember(video) { guessBook(video.title) }
@@ -248,6 +250,7 @@ private fun VideoCard(video: Video, folders: FolderStore, downloads: DownloadQue
     var bookTitle by rememberSaveable(video) { mutableStateOf(book.title) }
     var author by rememberSaveable(video) { mutableStateOf(book.author) }
     var narrator by rememberSaveable(video) { mutableStateOf("") }
+    var replace by rememberSaveable(video) { mutableStateOf(true) }
     val choices by remember(kind) { folders.folders(kind) }.collectAsState(emptySet())
     var folder by remember(kind, choices) { mutableStateOf(folders.lastFolder(kind)?.takeIf { it in choices } ?: choices.sorted().firstOrNull()) }
 
@@ -261,6 +264,7 @@ private fun VideoCard(video: Video, folders: FolderStore, downloads: DownloadQue
         if (kind == FolderKind.Music) {
             Field("Artist", artist) { artist = it }
             Field("Title", title) { title = it }
+            ReplaceBox(artist, title, library, replace) { replace = it }
         } else {
             Field("Book title", bookTitle) { bookTitle = it }
             Field("Author", author) { author = it }
@@ -272,7 +276,7 @@ private fun VideoCard(video: Video, folders: FolderStore, downloads: DownloadQue
             onClick = {
                 val dest = folder ?: return@Button
                 onDownload(
-                    if (kind == FolderKind.Music) musicJobs(listOf(PickedVideo(video, artist, title, true)), dest, downloads.nextId())
+                    if (kind == FolderKind.Music) musicJobs(listOf(PickedVideo(video, artist, title, true, replace)), dest, downloads.nextId(), library)
                     else bookJobs(listOf(video), bookTitle, author, narrator, dest, downloads.nextId()),
                     kind,
                 )
@@ -302,7 +306,7 @@ private enum class PlaylistAs(val label: String, val kind: FolderKind) { Songs("
  * music), then where to save and "Download N". An album or audiobook playlist is one album or book: one title for all.
  */
 private fun LazyListScope.playlist(
-    playlist: Playlist, album: Boolean, picks: SnapshotStateList<PickedVideo>, folders: FolderStore, downloads: DownloadQueue, onDownload: (List<DownloadJob>, FolderKind) -> Unit,
+    playlist: Playlist, album: Boolean, picks: SnapshotStateList<PickedVideo>, folders: FolderStore, downloads: DownloadQueue, library: List<Track>, onDownload: (List<DownloadJob>, FolderKind) -> Unit,
 ) {
     item(key = "playlist-head") {
         Column(Modifier.padding(horizontal = 20.dp, vertical = 8.dp)) {
@@ -310,11 +314,11 @@ private fun LazyListScope.playlist(
             Text("${playlist.videos.size} videos", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
-    item(key = "playlist-form") { PlaylistForm(playlist, album, picks, folders, downloads, onDownload) }
+    item(key = "playlist-form") { PlaylistForm(playlist, album, picks, folders, downloads, library, onDownload) }
 }
 
 @Composable
-private fun PlaylistForm(playlist: Playlist, album: Boolean, picks: SnapshotStateList<PickedVideo>, folders: FolderStore, downloads: DownloadQueue, onDownload: (List<DownloadJob>, FolderKind) -> Unit) {
+private fun PlaylistForm(playlist: Playlist, album: Boolean, picks: SnapshotStateList<PickedVideo>, folders: FolderStore, downloads: DownloadQueue, library: List<Track>, onDownload: (List<DownloadJob>, FolderKind) -> Unit) {
     var mode by rememberSaveable(playlist) { mutableStateOf(if (album) PlaylistAs.Album else PlaylistAs.Songs) }
     val kind = mode.kind
     val albumGuess = remember(playlist) { guessAlbum(playlist.name, picks.map { it.artist }) }
@@ -359,6 +363,7 @@ private fun PlaylistForm(playlist: Playlist, album: Boolean, picks: SnapshotStat
                     if (kind == FolderKind.Music && p.include) {
                         Field("Artist", p.artist) { picks[i] = p.copy(artist = it) }
                         Field("Title", p.title) { picks[i] = p.copy(title = it) }
+                        ReplaceBox(p.artist, p.title, library, p.replace) { picks[i] = p.copy(replace = it) }
                     }
                 }
             }
@@ -370,14 +375,27 @@ private fun PlaylistForm(playlist: Playlist, album: Boolean, picks: SnapshotStat
                 val dest = folder ?: return@Button
                 onDownload(
                     when (mode) {
-                        PlaylistAs.Songs -> musicJobs(picks, dest, downloads.nextId())
-                        PlaylistAs.Album -> albumJobs(picks, albumTitle, albumArtist, dest, downloads.nextId())
+                        PlaylistAs.Songs -> musicJobs(picks, dest, downloads.nextId(), library)
+                        PlaylistAs.Album -> albumJobs(picks, albumTitle, albumArtist, dest, downloads.nextId(), library)
                         PlaylistAs.Book -> bookJobs(picks.filter { it.include }.map { it.video }, bookTitle, author, narrator, dest, downloads.nextId())
                     },
                     kind,
                 )
             },
         ) { Text("Download $ticked") }
+    }
+}
+
+/** Shown only when the song is already on the phone: ticked, the download replaces that file. */
+@Composable
+private fun ReplaceBox(artist: String, title: String, library: List<Track>, replace: Boolean, onReplace: (Boolean) -> Unit) {
+    val old = remember(artist, title, library) { findDuplicate(artist, title, library) } ?: return
+    Row(Modifier.clickable { onReplace(!replace) }, verticalAlignment = Alignment.CenterVertically) {
+        Checkbox(replace, onCheckedChange = onReplace)
+        Text(
+            if (replace) "Replaces ${old.path.substringAfterLast('/')}" else "Keeps ${old.path.substringAfterLast('/')} too",
+            style = MaterialTheme.typography.bodyMedium, maxLines = 1, overflow = TextOverflow.Ellipsis,
+        )
     }
 }
 

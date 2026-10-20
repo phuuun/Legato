@@ -3,10 +3,12 @@ package com.phuuun.legato.converter
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.Service
+import android.content.ContentUris
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.media.MediaScannerConnection
+import android.net.Uri
 import android.os.Environment
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
@@ -19,7 +21,10 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
+import kotlin.coroutines.resume
 import java.io.File
 import java.net.HttpURLConnection
 import java.net.URI
@@ -71,7 +76,9 @@ class DownloadService : Service() {
         val dir = File(Environment.getExternalStorageDirectory(), job.folder)
         var part: File? = null
         try {
-            val name = uniqueName(job.fileName, dir.list()?.toSet().orEmpty())
+            // The file being replaced doesn't block its own name: the new one is renamed over it.
+            val old = job.replaces
+            val name = uniqueName(job.fileName, dir.list()?.filterNot { File(dir, it).path == old?.path }?.toSet().orEmpty())
             part = File(dir, PART + name)
             queue.set(job.id, JobState.Downloading(0))
             updateNotification("Downloading ${job.label}", 0)
@@ -98,12 +105,23 @@ class DownloadService : Service() {
             if (!app.tagWriter.write(part.path, properties, cover, rescan = false)) error("Couldn't write the tags")
             val target = File(dir, name)
             if (!part.renameTo(target)) error("Couldn't save the file")
-            MediaScannerConnection.scanFile(this, arrayOf(target.path), null, null)
+            val uri = scan(target.path)
+            // A replaced song hands its playlist spots and plays to the new file before it goes; if the scanner
+            // never answers, the old file stays, so nothing is lost either way.
+            if (old != null && uri != null) {
+                app.playlists.moveTrack(old.id, ContentUris.parseId(uri))
+                if (old.path != target.path) withContext(Dispatchers.IO) { File(old.path).delete() }
+            }
             queue.set(job.id, JobState.Done)
         } catch (e: Exception) {
             part?.delete()
             queue.set(job.id, JobState.Failed(e.message ?: "Download failed"))
         }
+    }
+
+    /** Has MediaStore read the file; the link it returns carries the file's id. Null if the scanner doesn't answer in 10 s. */
+    private suspend fun scan(path: String): Uri? = withTimeoutOrNull(10_000) {
+        suspendCancellableCoroutine { done -> MediaScannerConnection.scanFile(this@DownloadService, arrayOf(path), null) { _, uri -> done.resume(uri) } }
     }
 
     /** Range requests in 8 MB chunks: YouTube throttles or drops long single responses. */

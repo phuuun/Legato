@@ -410,7 +410,7 @@ fun LegatoNav(library: LibraryRepository, audiobooks: LibraryRepository, player:
                                         }
                                     }
                                 }
-                                Section.Converter -> ConverterScreen(converter, sharedLink, onSharedLinkUsed, folders, downloads)
+                                Section.Converter -> ConverterScreen(converter, sharedLink, onSharedLinkUsed, folders, downloads, state.tracks)
                             }
                         }
                     }

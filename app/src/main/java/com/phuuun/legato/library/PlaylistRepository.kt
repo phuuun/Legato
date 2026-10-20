@@ -50,6 +50,12 @@ class PlaylistRepository(private val db: LegatoDb, private val library: LibraryR
         }
     }
 
+    /** A file replaced by a new one (new MediaStore id): its playlist spots and plays go to the new id. */
+    suspend fun moveTrack(old: Long, new: Long) {
+        dao.moveTrack(old, new)
+        db.stats().moveTrack(old, new)
+    }
+
     suspend fun recordPlay(trackId: Long, now: Long) = db.stats().recordPlay(trackId, now)
 
     /** Ids of tracks played to the end: most often first, or most recent first. */

@@ -59,6 +59,9 @@ abstract class PlaylistDao {
         insertTracks(ids.mapIndexed { i, t -> PlaylistTrack(id, i, t) })
     }
 
+    @Query("UPDATE playlist_tracks SET mediaStoreId = :new WHERE mediaStoreId = :old")
+    abstract suspend fun moveTrack(old: Long, new: Long)
+
     @Transaction
     open suspend fun delete(id: Long) {
         clear(id)
@@ -80,6 +83,9 @@ abstract class StatsDao {
         ensure(id, now)
         bump(id, now)
     }
+
+    @Query("UPDATE OR REPLACE play_stats SET mediaStoreId = :new WHERE mediaStoreId = :old")
+    abstract suspend fun moveTrack(old: Long, new: Long)
 
     @Query("SELECT * FROM play_stats WHERE mediaStoreId = :id")
     abstract suspend fun get(id: Long): PlayStat?

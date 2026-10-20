@@ -99,4 +99,15 @@ class PlaylistRepositoryTest {
         repo.recordPlay(1, now = 200)
         assertEquals(PlayStat(1, 2, 200), db.stats().get(1))
     }
+
+    @Test
+    fun a_replaced_file_keeps_its_playlist_spots_and_plays() = runTest {
+        val p = repo.create("Mix")
+        repo.addTracks(p, listOf(1, 2, 1))
+        db.stats().recordPlay(1, 100)
+        repo.moveTrack(1, 3)
+        assertEquals(listOf(3L, 2L, 3L), ids(p))
+        assertEquals(PlayStat(3, 1, 100), db.stats().get(3))
+        assertEquals(null, db.stats().get(1))
+    }
 }
