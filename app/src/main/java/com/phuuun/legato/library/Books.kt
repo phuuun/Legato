@@ -1,6 +1,7 @@
 package com.phuuun.legato.library
 
 import android.net.Uri
+import com.phuuun.legato.library.db.PlayStat
 
 /** An audiobook: one file, or chapter files that share a book title. */
 data class Book(val title: String, val author: String, val artUri: Uri?, val chapters: List<Track>) {
@@ -14,12 +15,13 @@ fun groupBooks(tracks: List<Track>): List<Book> =
         Book(if (key.startsWith("#")) chapters.first().title else key, chapters.first().artist, chapters.first().artUri, chapters)
     }.sortedBy { it.title.lowercase() }
 
-/** Title, author, or newest first (a book counts as added when its newest file was). */
+/** Title, author, newest first (a book counts as added when its newest file was), or by its chapters' plays. */
 @JvmName("booksSortedFor")
-fun List<Book>.sortedFor(sort: Sort): List<Book> = when (sort) {
+fun List<Book>.sortedFor(sort: Sort, stats: Map<Long, PlayStat> = emptyMap()): List<Book> = when (sort) {
     Sort.Title -> sortedBy { it.title.lowercase() }
     Sort.Artist -> sortedWith(compareBy({ it.author.lowercase() }, { it.title.lowercase() }))
     Sort.Recent -> sortedByDescending { b -> b.chapters.maxOf { it.added } }
+    Sort.Plays, Sort.Played -> byPlays({ it.title }) { stats.score(it.chapters, sort) }
 }
 
 /** Books show with the album card and album page: cover, title, author, then the chapters. */

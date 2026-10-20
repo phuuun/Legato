@@ -188,14 +188,14 @@ private fun DownloadsIcon(icon: ImageVector, jobs: List<DownloadJob>) {
     }
 }
 
-/** Beside search: title, artist (author, on Audiobooks) or newest first, for songs, albums and books alike. */
+/** Beside search: title, artist (author, on Audiobooks), newest first or by plays, for songs, albums and books alike. */
 @Composable
 private fun SortButton(sort: Sort, books: Boolean, onPick: (Sort) -> Unit) {
     var open by remember { mutableStateOf(false) }
     Box(Modifier.padding(end = 8.dp)) {
         IconButton(onClick = { open = true }) { Icon(Icons.AutoMirrored.Rounded.Sort, contentDescription = "Sort") }
         DropdownMenu(open, { open = false }) {
-            listOf(Sort.Title to "Title A–Z", Sort.Artist to if (books) "Author A–Z" else "Artist A–Z", Sort.Recent to "Recently added").forEach { (s, label) ->
+            listOf(Sort.Title to "Title A–Z", Sort.Artist to if (books) "Author A–Z" else "Artist A–Z", Sort.Recent to "Recently added", Sort.Plays to "Most played", Sort.Played to "Recently played").forEach { (s, label) ->
                 DropdownMenuItem(
                     text = { Text(label) }, onClick = { onPick(s); open = false },
                     trailingIcon = { if (s == sort) Icon(Icons.Rounded.Check, contentDescription = "Selected") },
@@ -223,7 +223,7 @@ fun LegatoNav(library: LibraryRepository, audiobooks: LibraryRepository, player:
     val bookNav = rememberNavController()
     val pager = rememberPagerState { Section.entries.size }
     // One view model for every destination, so the loaded library and the search box survive navigation.
-    val vm: LibraryViewModel = viewModel(factory = viewModelFactory { initializer { LibraryViewModel(library, folders.sort) } })
+    val vm: LibraryViewModel = viewModel(factory = viewModelFactory { initializer { LibraryViewModel(library, folders.sort, playlistRepo.stats) } })
     val state by vm.state.collectAsState()
     val nowPlayingVm: NowPlayingViewModel = viewModel(factory = viewModelFactory { initializer { NowPlayingViewModel(player.controller, player.sleep, bookmarks) } })
     val now by nowPlayingVm.state.collectAsState()
@@ -272,7 +272,8 @@ fun LegatoNav(library: LibraryRepository, audiobooks: LibraryRepository, player:
     // Null until the first scan lands, so the Audiobooks tab doesn't flash "No audiobooks" first.
     val audiobookTracks by audiobooks.tracks.collectAsState(null)
     val sort by remember { folders.sort }.collectAsState(Sort.Title)
-    val bookList = remember(audiobookTracks, sort) { audiobookTracks?.let(::groupBooks)?.sortedFor(sort) }
+    val stats by remember { playlistRepo.stats }.collectAsState(emptyMap())
+    val bookList = remember(audiobookTracks, sort, stats) { audiobookTracks?.let(::groupBooks)?.sortedFor(sort, stats) }
     val books = bookList.orEmpty()
     val audiobookFolders by remember { folders.folders(FolderKind.Audiobooks) }.collectAsState(null)
     val spots by remember { progress.spots() }.collectAsState(emptyMap())

@@ -1,6 +1,7 @@
 package com.phuuun.legato.library
 
 import com.phuuun.legato.library.db.LegatoDb
+import com.phuuun.legato.library.db.PlayStat
 import com.phuuun.legato.library.db.Playlist
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
@@ -52,6 +53,9 @@ class PlaylistRepository(private val db: LegatoDb, private val library: LibraryR
     suspend fun recordPlay(trackId: Long, now: Long) = db.stats().recordPlay(trackId, now)
 
     /** Ids of tracks played to the end: most often first, or most recent first. */
+    /** Every track's play count and last play, by MediaStore id, for the play sorts. */
+    val stats: Flow<Map<Long, PlayStat>> = db.stats().byPlays().map { s -> s.associateBy { it.mediaStoreId } }
+
     fun playedIds(byRecent: Boolean): Flow<List<Long>> =
         (if (byRecent) db.stats().byRecent() else db.stats().byPlays()).map { stats -> stats.map { it.mediaStoreId } }
 

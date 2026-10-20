@@ -1,5 +1,7 @@
 package com.phuuun.legato.library
 
+import com.phuuun.legato.library.db.PlayStat
+
 /** Grouped by MediaStore album id, not name: two "Greatest Hits" by different artists stay separate. */
 fun groupAlbums(tracks: List<Track>): List<Album> =
     tracks.groupBy { it.albumId }.map { (id, group) ->
@@ -8,19 +10,28 @@ fun groupAlbums(tracks: List<Track>): List<Album> =
     }.sortedBy { it.title.lowercase() }
 
 /** The order picked beside search. Artists keep A–Z whatever is picked; [Artist] means author for books. */
-enum class Sort { Title, Artist, Recent }
+enum class Sort { Title, Artist, Recent, Plays, Played }
 
-fun List<Track>.sortedFor(sort: Sort): List<Track> = when (sort) {
+/** How tracks rank under [Sort.Plays] (all their plays) or [Sort.Played] (their latest play); 0 when never played. */
+fun Map<Long, PlayStat>.score(tracks: List<Track>, sort: Sort): Long =
+    if (sort == Sort.Plays) tracks.sumOf { get(it.id)?.playCount?.toLong() ?: 0 } else tracks.maxOf { get(it.id)?.lastPlayedAt ?: 0 }
+
+/** Most first; ties and the never played go A–Z. */
+fun <T> List<T>.byPlays(title: (T) -> String, score: (T) -> Long): List<T> = sortedWith(compareByDescending(score).thenBy { title(it).lowercase() })
+
+fun List<Track>.sortedFor(sort: Sort, stats: Map<Long, PlayStat> = emptyMap()): List<Track> = when (sort) {
     Sort.Title -> sortedBy { it.title.lowercase() }
     Sort.Artist -> sortedWith(compareBy({ it.artist.lowercase() }, { it.album.lowercase() }, { it.trackNumber }, { it.title.lowercase() }))
     Sort.Recent -> sortedByDescending { it.added }
+    Sort.Plays, Sort.Played -> byPlays({ it.title }) { stats.score(listOf(it), sort) }
 }
 
 @JvmName("albumsSortedFor")
-fun List<Album>.sortedFor(sort: Sort): List<Album> = when (sort) {
+fun List<Album>.sortedFor(sort: Sort, stats: Map<Long, PlayStat> = emptyMap()): List<Album> = when (sort) {
     Sort.Title -> sortedBy { it.title.lowercase() }
     Sort.Artist -> sortedWith(compareBy({ it.artist.lowercase() }, { it.title.lowercase() }))
     Sort.Recent -> sortedByDescending { a -> a.tracks.maxOf { it.added } }
+    Sort.Plays, Sort.Played -> byPlays({ it.title }) { stats.score(it.tracks, sort) }
 }
 
 /** An album sits under every artist on it, so a duet shows up under both singers. */

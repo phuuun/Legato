@@ -1,5 +1,6 @@
 package com.phuuun.legato.library
 
+import com.phuuun.legato.library.db.PlayStat
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
 import org.junit.Test
@@ -27,6 +28,18 @@ class GroupingTest {
         assertEquals(listOf(2L, 1L, 3L), songs.sortedFor(Sort.Title).map { it.id })
         assertEquals(listOf(2L, 3L, 1L), songs.sortedFor(Sort.Artist).map { it.id })
         assertEquals(listOf(1L, 3L, 2L), songs.sortedFor(Sort.Recent).map { it.id })
+    }
+
+    @Test
+    fun most_and_recently_played_rank_songs_and_albums_with_unplayed_last_a_to_z() {
+        val songs = listOf(row(1, "X", 1, title = "b"), row(2, "X", 1, title = "a"), row(3, "Y", 2, title = "c"), row(4, "Z", 3, title = "d"))
+        val stats = listOf(PlayStat(1, 5, 100), PlayStat(3, 2, 900), PlayStat(4, 6, 50)).associateBy { it.mediaStoreId }
+        assertEquals(listOf(4L, 1L, 3L, 2L), songs.sortedFor(Sort.Plays, stats).map { it.id })
+        assertEquals(listOf(3L, 1L, 4L, 2L), songs.sortedFor(Sort.Played, stats).map { it.id })
+        // Album X: 5 plays in all, last at 100.
+        val albums = groupAlbums(songs)
+        assertEquals(listOf("Z", "X", "Y"), albums.sortedFor(Sort.Plays, stats).map { it.title })
+        assertEquals(listOf("Y", "X", "Z"), albums.sortedFor(Sort.Played, stats).map { it.title })
     }
 
     @Test
