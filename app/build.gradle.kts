@@ -12,8 +12,8 @@ android {
         applicationId = "com.phuuun.legato"
         minSdk = 30
         targetSdk = 37
-        versionCode = 3
-        versionName = "1.0.2"
+        versionCode = 4
+        versionName = "1.0.3"
         // TagLib is native; this phone is 64-bit ARM, and every other ABI is dead weight in the APK.
         ndk { abiFilters += "arm64-v8a" }
     }
