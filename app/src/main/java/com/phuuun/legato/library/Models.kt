@@ -20,15 +20,22 @@ data class Track(
     val modified: Long = 0,
     val artists: List<String> = emptyList(),
     val added: Long = 0,
+    /** The album-artist tag, split like [artists]; empty when the file has none. */
+    val albumArtists: List<String> = emptyList(),
 )
 
 /** The album tag as the file has it: blank when MediaStore made one up ("Unknown album", or the folder's name for an untagged file). */
 val Track.albumTag: String
     get() = album.takeUnless { it == "Unknown album" || it == relativePath.trimEnd('/').substringAfterLast('/') }.orEmpty()
 
-data class Album(val id: Long, val title: String, val artist: String, val artUri: Uri?, val tracks: List<Track>)
+/** [artists]: who the album is by (see mainArtists); [artist] shows them, "Unknown artist" when there are none. */
+data class Album(val id: Long, val title: String, val artist: String, val artUri: Uri?, val tracks: List<Track>, val artists: List<String> = emptyList())
 
-data class Artist(val name: String, val albums: List<Album>)
+/** Like Spotify: [albums] are the artist's own, [appearsOn] are other artists' albums with them on a song. */
+data class Artist(val name: String, val albums: List<Album>, val appearsOn: List<Album> = emptyList()) {
+    /** Everything they're on: their albums whole, and their songs on the rest. */
+    val tracks: List<Track> get() = albums.flatMap { it.tracks } + appearsOn.flatMap { a -> a.tracks.filter { name in it.artists } }
+}
 
 // ponytail: a comma always splits, so "Tyler, The Creator" becomes two artists; keep a list of comma names if one turns up.
 /** One artist tag as its artists: "A; B" (what Edit writes) and "A, B" (typed by hand) are both two. */
@@ -53,6 +60,7 @@ fun trackFromRow(
     composer: String? = null,
     modified: Long = 0,
     added: Long = 0,
+    albumArtist: String? = null,
 ): Track {
     val uri = ContentUris.withAppendedId(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, id)
     val artists = splitArtists(artist.orEmpty()).filter { it != MediaStore.UNKNOWN_STRING }
@@ -72,5 +80,6 @@ fun trackFromRow(
         modified = modified,
         artists = artists,
         added = added,
+        albumArtists = splitArtists(albumArtist.orEmpty()).filter { it != MediaStore.UNKNOWN_STRING },
     )
 }

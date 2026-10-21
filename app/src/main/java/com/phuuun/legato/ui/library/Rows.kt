@@ -85,11 +85,14 @@ fun ArtistRow(artist: Artist, onClick: () -> Unit, modifier: Modifier = Modifier
         modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 20.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp),
     ) {
-        Artwork(artist.albums.firstOrNull()?.artUri, Modifier.size(48.dp).clip(RoundedCornerShape(24.dp)))
+        Artwork((artist.albums + artist.appearsOn).firstOrNull()?.artUri, Modifier.size(48.dp).clip(RoundedCornerShape(24.dp)))
         Column(Modifier.weight(1f)) {
             Text(artist.name, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Text(
-                "${artist.albums.size} ${if (artist.albums.size == 1) "album" else "albums"}",
+                listOfNotNull(
+                    artist.albums.size.takeIf { it > 0 }?.let { "$it ${if (it == 1) "album" else "albums"}" },
+                    artist.appearsOn.size.takeIf { it > 0 }?.let { "appears on $it" },
+                ).joinToString(" · ").replaceFirstChar { it.uppercase() },
                 style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }

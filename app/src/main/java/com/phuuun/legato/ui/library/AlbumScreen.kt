@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
@@ -114,10 +115,21 @@ fun ArtistScreen(artist: Artist?, onBack: () -> Unit, onAlbum: (Long) -> Unit, o
         Back(onBack)
         if (artist == null) { Empty("Artist not found", "It may have been deleted."); return }
         Text(artist.name, style = MaterialTheme.typography.headlineLarge, modifier = Modifier.padding(horizontal = 20.dp))
-        PlayShuffle(artist.albums.flatMap { it.tracks }, onPlay, Modifier.padding(start = 20.dp, top = 12.dp))
+        PlayShuffle(artist.tracks, onPlay, Modifier.padding(start = 20.dp, top = 12.dp))
         LazyVerticalGrid(
             GridCells.Fixed(2), Modifier.fillMaxSize(), contentPadding = PaddingValues(20.dp),
             horizontalArrangement = Arrangement.spacedBy(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) { items(artist.albums, key = { it.id }) { a -> AlbumCard(a, onClick = { onAlbum(a.id) }, actions = actions) } }
+        ) {
+            // Section titles only when there's an Appears on: an artist with just their own albums keeps a plain grid.
+            val titled = artist.appearsOn.isNotEmpty()
+            if (titled && artist.albums.isNotEmpty()) item(span = { GridItemSpan(maxLineSpan) }) { Section("ALBUMS") }
+            items(artist.albums, key = { it.id }) { a -> AlbumCard(a, onClick = { onAlbum(a.id) }, actions = actions) }
+            if (titled) item(span = { GridItemSpan(maxLineSpan) }) { Section("APPEARS ON") }
+            items(artist.appearsOn, key = { "on" + it.id }) { a -> AlbumCard(a, onClick = { onAlbum(a.id) }, actions = actions) }
+        }
     }
 }
+
+@Composable
+private fun Section(text: String) =
+    Text(text, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 8.dp))

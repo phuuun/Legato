@@ -3,6 +3,7 @@ package com.phuuun.legato.library
 import com.phuuun.legato.library.db.PlayStat
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -79,10 +80,35 @@ class GroupingTest {
     }
 
     @Test
-    fun album_with_two_artists_appears_under_both() {
-        val artists = groupArtists(groupAlbums(listOf(row(1, "X", 1, artist = "Daniel Caesar; H.E.R."), row(2, "Y", 2, artist = "H.E.R."))))
-        assertEquals(listOf("Daniel Caesar", "H.E.R."), artists.map { it.name })
-        assertEquals(listOf("X", "Y"), artists.single { it.name == "H.E.R." }.albums.map { it.title })
+    fun a_featured_artist_gets_the_album_under_appears_on() {
+        val damn = listOf(row(1, "DAMN.", 1, artist = "Kendrick Lamar"), row(2, "DAMN.", 1, artist = "Kendrick Lamar; Rihanna"), row(3, "DAMN.", 1, artist = "Kendrick Lamar, Zacari"))
+        val anti = listOf(row(4, "ANTI", 2, artist = "Rihanna"))
+        val albums = groupAlbums(damn + anti)
+        assertEquals("Kendrick Lamar", albums.single { it.title == "DAMN." }.artist)
+        val rihanna = groupArtists(albums).single { it.name == "Rihanna" }
+        assertEquals(listOf("ANTI"), rihanna.albums.map { it.title })
+        assertEquals(listOf("DAMN."), rihanna.appearsOn.map { it.title })
+        // Playing Rihanna plays her own album and only her song on DAMN.
+        assertEquals(listOf(4L, 2L), rihanna.tracks.map { it.id })
+        assertEquals(listOf("DAMN."), groupArtists(albums).single { it.name == "Kendrick Lamar" }.albums.map { it.title })
+    }
+
+    @Test
+    fun a_single_belongs_to_its_first_artist() {
+        val artists = groupArtists(groupAlbums(listOf(row(1, "Best Part", 1, artist = "Daniel Caesar; H.E.R."))))
+        assertEquals(listOf("Best Part"), artists.single { it.name == "Daniel Caesar" }.albums.map { it.title })
+        assertEquals(listOf("Best Part"), artists.single { it.name == "H.E.R." }.appearsOn.map { it.title })
+    }
+
+    @Test
+    fun the_album_artist_tag_decides_and_can_name_two() {
+        val tracks = listOf("JAY-Z", "Kanye West; JAY-Z").mapIndexed { i, a ->
+            trackFromRow(i + 1L, "T$i", a, "Watch the Throne", 1, 1000, "$i.flac", albumArtist = "JAY-Z; Kanye West")
+        }
+        val artists = groupArtists(groupAlbums(tracks))
+        assertEquals(listOf("Watch the Throne"), artists.single { it.name == "Kanye West" }.albums.map { it.title })
+        assertEquals(listOf("Watch the Throne"), artists.single { it.name == "JAY-Z" }.albums.map { it.title })
+        assertTrue(artists.all { it.appearsOn.isEmpty() })
     }
 
     @Test
