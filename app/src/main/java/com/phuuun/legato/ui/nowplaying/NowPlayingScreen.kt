@@ -105,16 +105,19 @@ fun NowPlayingSheet(state: NowPlayingState, vm: NowPlayingViewModel, onDismiss: 
             }
             Column(Modifier.fillMaxSize().safeDrawingPadding().padding(horizontal = 24.dp)) {
                 Box(Modifier.fillMaxWidth().padding(top = 12.dp)) {
-                    IconButton(onClick = { scope.launch { sheet.hide() }.invokeOnCompletion { onDismiss() } }, modifier = Modifier.align(Alignment.CenterStart)) {
-                        Icon(Icons.Rounded.KeyboardArrowDown, contentDescription = "Close")
-                    }
-                    Text("NOW PLAYING", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.align(Alignment.Center))
-                    Row(Modifier.align(Alignment.CenterEnd)) {
+                    // At most two buttons a side, so neither reaches the title in the middle.
+                    Row(Modifier.align(Alignment.CenterStart)) {
+                        IconButton(onClick = { scope.launch { sheet.hide() }.invokeOnCompletion { onDismiss() } }) {
+                            Icon(Icons.Rounded.KeyboardArrowDown, contentDescription = "Close")
+                        }
                         state.trackId?.let { id ->
                             IconButton(onClick = { scope.launch { sheet.hide() }.invokeOnCompletion { onDismiss(); onEdit(id) } }) {
                                 Icon(Icons.Rounded.Edit, contentDescription = "Edit info")
                             }
                         }
+                    }
+                    Text("NOW PLAYING", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.align(Alignment.Center))
+                    Row(Modifier.align(Alignment.CenterEnd)) {
                         // A book swaps the queue for its chapters and bookmarks.
                         if (state.isAudiobook) {
                             state.trackId?.let { id ->
