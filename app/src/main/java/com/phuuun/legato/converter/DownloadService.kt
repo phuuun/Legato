@@ -16,6 +16,7 @@ import com.phuuun.legato.LegatoApp
 import com.phuuun.legato.library.formatTimestamp
 import com.phuuun.legato.library.edit.CoverChange
 import com.phuuun.legato.library.edit.coverFromUrl
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -115,8 +116,18 @@ class DownloadService : Service() {
             queue.set(job.id, JobState.Done)
         } catch (e: Exception) {
             part?.delete()
-            queue.set(job.id, JobState.Failed(e.message ?: "Download failed"))
+            queue.set(job.id, JobState.Failed(if (e is CancellationException) "Stopped before it finished" else youTubeError(e, "Download failed")))
+            // The service is going away: stop here instead of failing every job still waiting.
+            if (e is CancellationException) throw e
         }
+    }
+
+    // Android 15 allows a data-sync service about 6 hours a day; a service that doesn't stop when told crashes the app.
+    // What's still waiting fails with the reason, and Retry picks it up once Legato is back in front.
+    override fun onTimeout(startId: Int, fgsType: Int) {
+        app.downloads.jobs.value.filter { it.state == JobState.Queued }
+            .forEach { app.downloads.set(it.id, JobState.Failed("Android's download time for today ran out")) }
+        stopSelf()
     }
 
     /** Has MediaStore read the file; the link it returns carries the file's id. Null if the scanner doesn't answer in 10 s. */
@@ -137,6 +148,8 @@ class DownloadService : Service() {
                 when (c.responseCode) {
                     206 -> total = c.getHeaderField("Content-Range")?.substringAfter('/')?.toLongOrNull() ?: error("No file size from YouTube")
                     200 -> total = Long.MIN_VALUE // the whole file in one go; stop after this read
+                    // A 403 on a fresh link usually means YouTube changed how links are signed.
+                    403 -> error("YouTube refused the download (403). If it keeps happening: $EXTRACTOR_BROKE")
                     else -> error("YouTube refused the download (${c.responseCode})")
                 }
                 val read = c.inputStream.use { it.copyTo(out) }

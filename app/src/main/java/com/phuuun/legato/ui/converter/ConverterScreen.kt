@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
@@ -82,6 +83,7 @@ import com.phuuun.legato.converter.guessBook
 import com.phuuun.legato.converter.guessSong
 import com.phuuun.legato.converter.parseYouTube
 import com.phuuun.legato.converter.videoUrl
+import com.phuuun.legato.converter.youTubeError
 import com.phuuun.legato.library.FolderKind
 import com.phuuun.legato.library.FolderStore
 import com.phuuun.legato.library.Track
@@ -101,8 +103,24 @@ internal sealed interface Fetch {
     /** A video opened from inside a playlist: which one did they mean? */
     data class Ask(val link: YouTubeLink) : Fetch
     data class One(val video: Video) : Fetch
-    /** [album]: a YouTube Music album, so the preview opens on ALBUM. */
-    data class Many(val playlist: Playlist, val album: Boolean) : Fetch
+    data class Many(val playlist: Playlist, val choices: PlaylistChoices) : Fetch
+}
+
+/** What a playlist becomes and the names it gets. Kept with the preview, so scrolling and swiping away keep them. */
+internal class PlaylistChoices(playlist: Playlist, album: Boolean, artists: List<String>) {
+    private val albumGuess = guessAlbum(playlist.name, artists)
+    private val book = guessBook(playlist.name)
+
+    /** A YouTube Music album opens on ALBUM. */
+    var mode by mutableStateOf(if (album) PlaylistAs.Album else PlaylistAs.Songs)
+    var albumTitle by mutableStateOf(albumGuess.title)
+    var albumArtist by mutableStateOf(albumGuess.artist)
+    var bookTitle by mutableStateOf(book.title)
+    var author by mutableStateOf(book.author)
+    var narrator by mutableStateOf("")
+
+    /** The folder picked by hand; until then, the last one used. */
+    var folder by mutableStateOf<String?>(null)
 }
 
 /**
@@ -119,7 +137,7 @@ class ConverterState(private val scope: CoroutineScope) {
 
     fun loadVideo(id: String) {
         fetch = Fetch.Loading
-        scope.launch { fetch = try { Fetch.One(YouTube.video(videoUrl(id))) } catch (e: Exception) { Fetch.Error(e.message ?: "Couldn't load that video") } }
+        scope.launch { fetch = try { Fetch.One(YouTube.video(videoUrl(id))) } catch (e: Exception) { Fetch.Error(youTubeError(e, "Couldn't load that video")) } }
     }
 
     fun loadPlaylist(id: String) {
@@ -129,9 +147,9 @@ class ConverterState(private val scope: CoroutineScope) {
                 val playlist = YouTube.playlist(playlistUrl(id))
                 picks.clear()
                 picks += playlist.videos.map { v -> guessSong(v.title, v.uploader).let { PickedVideo(v, it.artist, it.title, true) } }
-                Fetch.Many(playlist, isAlbumPlaylist(id))
+                Fetch.Many(playlist, PlaylistChoices(playlist, isAlbumPlaylist(id), picks.map { it.artist }))
             } catch (e: Exception) {
-                Fetch.Error(e.message ?: "Couldn't load that playlist")
+                Fetch.Error(youTubeError(e, "Couldn't load that playlist"))
             }
         }
     }
@@ -227,7 +245,7 @@ fun ConverterScreen(state: ConverterState, initialLink: String?, onInitialLinkUs
                 is Fetch.Many -> Unit
             }
         }
-        (fetch as? Fetch.Many)?.let { playlist(it.playlist, it.album, picks, folders, downloads, library) { batch, kind -> queue(batch, kind) } }
+        (fetch as? Fetch.Many)?.let { playlist(it.playlist, it.choices, picks, folders, downloads, library) { batch, kind -> queue(batch, kind) } }
         if (jobs.isNotEmpty()) {
             item {
                 Row(Modifier.fillMaxWidth().padding(start = 20.dp, end = 8.dp, top = 16.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -299,76 +317,78 @@ private fun KindToggle(kind: FolderKind, onKind: (FolderKind) -> Unit) =
     }
 
 /** What a playlist becomes: loose songs, one album, or one audiobook. */
-private enum class PlaylistAs(val label: String, val kind: FolderKind) { Songs("MUSIC", FolderKind.Music), Album("ALBUM", FolderKind.Music), Book("AUDIOBOOK", FolderKind.Audiobooks) }
+internal enum class PlaylistAs(val label: String, val kind: FolderKind) { Songs("MUSIC", FolderKind.Music), Album("ALBUM", FolderKind.Music), Book("AUDIOBOOK", FolderKind.Audiobooks) }
 
 /**
  * A playlist as list items: header with MUSIC / ALBUM / AUDIOBOOK, one row per video (ticked, with its guess for
  * music), then where to save and "Download N". An album or audiobook playlist is one album or book: one title for all.
+ * Each video is its own item, so a long playlist only builds the rows on screen.
  */
 private fun LazyListScope.playlist(
-    playlist: Playlist, album: Boolean, picks: SnapshotStateList<PickedVideo>, folders: FolderStore, downloads: DownloadQueue, library: List<Track>, onDownload: (List<DownloadJob>, FolderKind) -> Unit,
+    playlist: Playlist, choices: PlaylistChoices, picks: SnapshotStateList<PickedVideo>, folders: FolderStore, downloads: DownloadQueue, library: List<Track>, onDownload: (List<DownloadJob>, FolderKind) -> Unit,
 ) {
-    item(key = "playlist-head") {
-        Column(Modifier.padding(horizontal = 20.dp, vertical = 8.dp)) {
-            Text(playlist.name, style = MaterialTheme.typography.titleMedium)
-            Text("${playlist.videos.size} videos", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        }
-    }
-    item(key = "playlist-form") { PlaylistForm(playlist, album, picks, folders, downloads, library, onDownload) }
+    item(key = "playlist-head") { PlaylistHead(playlist, choices) }
+    itemsIndexed(picks) { i, p -> PickRow(i, p, choices.mode.kind, picks, library) }
+    item(key = "playlist-foot") { PlaylistFoot(choices, picks, folders, downloads, library, onDownload) }
 }
 
 @Composable
-private fun PlaylistForm(playlist: Playlist, album: Boolean, picks: SnapshotStateList<PickedVideo>, folders: FolderStore, downloads: DownloadQueue, library: List<Track>, onDownload: (List<DownloadJob>, FolderKind) -> Unit) {
-    var mode by rememberSaveable(playlist) { mutableStateOf(if (album) PlaylistAs.Album else PlaylistAs.Songs) }
-    val kind = mode.kind
-    val albumGuess = remember(playlist) { guessAlbum(playlist.name, picks.map { it.artist }) }
-    var albumTitle by rememberSaveable(playlist) { mutableStateOf(albumGuess.title) }
-    var albumArtist by rememberSaveable(playlist) { mutableStateOf(albumGuess.artist) }
-    val book = remember(playlist) { guessBook(playlist.name) }
-    var bookTitle by rememberSaveable(playlist) { mutableStateOf(book.title) }
-    var author by rememberSaveable(playlist) { mutableStateOf(book.author) }
-    var narrator by rememberSaveable(playlist) { mutableStateOf("") }
-    val choices by remember(kind) { folders.folders(kind) }.collectAsState(emptySet())
-    var folder by remember(kind, choices) { mutableStateOf(folders.lastFolder(kind)?.takeIf { it in choices } ?: choices.sorted().firstOrNull()) }
-    val ticked = picks.count { it.include }
-
-    Column(Modifier.padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+private fun PlaylistHead(playlist: Playlist, choices: PlaylistChoices) {
+    Column(Modifier.padding(horizontal = 20.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Column {
+            Text(playlist.name, style = MaterialTheme.typography.titleMedium)
+            Text("${playlist.videos.size} videos", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
         Row(horizontalArrangement = Arrangement.spacedBy(20.dp)) {
             PlaylistAs.entries.forEach { m ->
                 Text(
                     m.label, style = MaterialTheme.typography.labelSmall,
-                    fontWeight = if (m == mode) FontWeight.Bold else FontWeight.Normal,
-                    color = if (m == mode) MaterialTheme.colorScheme.onBackground else MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.clickable { mode = m }.padding(vertical = 8.dp),
+                    fontWeight = if (m == choices.mode) FontWeight.Bold else FontWeight.Normal,
+                    color = if (m == choices.mode) MaterialTheme.colorScheme.onBackground else MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.clickable { choices.mode = m }.padding(vertical = 8.dp),
                 )
             }
         }
-        if (mode == PlaylistAs.Album) {
-            Field("Album", albumTitle) { albumTitle = it }
-            Field("Album artist", albumArtist) { albumArtist = it }
+        if (choices.mode == PlaylistAs.Album) {
+            Field("Album", choices.albumTitle) { choices.albumTitle = it }
+            Field("Album artist", choices.albumArtist) { choices.albumArtist = it }
         }
-        if (kind == FolderKind.Audiobooks) {
-            Field("Book title", bookTitle) { bookTitle = it }
-            Field("Author", author) { author = it }
-            Field("Narrator", narrator) { narrator = it }
+        if (choices.mode.kind == FolderKind.Audiobooks) {
+            Field("Book title", choices.bookTitle) { choices.bookTitle = it }
+            Field("Author", choices.author) { choices.author = it }
+            Field("Narrator", choices.narrator) { choices.narrator = it }
         }
-        picks.forEachIndexed { i, p ->
-            Row(verticalAlignment = Alignment.Top) {
-                Checkbox(p.include, onCheckedChange = { picks[i] = p.copy(include = it) })
-                Column(Modifier.weight(1f).padding(top = 12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Text(
-                        "${i + 1}. ${p.video.title} · ${formatTime(p.video.durationSec * 1000)}", style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2, overflow = TextOverflow.Ellipsis,
-                    )
-                    if (kind == FolderKind.Music && p.include) {
-                        Field("Artist", p.artist) { picks[i] = p.copy(artist = it) }
-                        Field("Title", p.title) { picks[i] = p.copy(title = it) }
-                        ReplaceBox(p.artist, p.title, library, p.replace) { picks[i] = p.copy(replace = it) }
-                    }
-                }
+    }
+}
+
+@Composable
+private fun PickRow(i: Int, p: PickedVideo, kind: FolderKind, picks: SnapshotStateList<PickedVideo>, library: List<Track>) {
+    Row(Modifier.padding(horizontal = 20.dp, vertical = 5.dp), verticalAlignment = Alignment.Top) {
+        Checkbox(p.include, onCheckedChange = { picks[i] = p.copy(include = it) })
+        Column(Modifier.weight(1f).padding(top = 12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text(
+                "${i + 1}. ${p.video.title} · ${formatTime(p.video.durationSec * 1000)}", style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2, overflow = TextOverflow.Ellipsis,
+            )
+            if (kind == FolderKind.Music && p.include) {
+                Field("Artist", p.artist) { picks[i] = p.copy(artist = it) }
+                Field("Title", p.title) { picks[i] = p.copy(title = it) }
+                ReplaceBox(p.artist, p.title, library, p.replace) { picks[i] = p.copy(replace = it) }
             }
         }
-        Destination(kind, choices, folder, onPick = { folder = it }, onAdd = { folders.add(kind, it); folder = it })
+    }
+}
+
+@Composable
+private fun PlaylistFoot(choices: PlaylistChoices, picks: SnapshotStateList<PickedVideo>, folders: FolderStore, downloads: DownloadQueue, library: List<Track>, onDownload: (List<DownloadJob>, FolderKind) -> Unit) {
+    val mode = choices.mode
+    val kind = mode.kind
+    val options by remember(kind) { folders.folders(kind) }.collectAsState(emptySet())
+    val folder = choices.folder?.takeIf { it in options } ?: folders.lastFolder(kind)?.takeIf { it in options } ?: options.sorted().firstOrNull()
+    val ticked = picks.count { it.include }
+
+    Column(Modifier.padding(horizontal = 20.dp, vertical = 5.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Destination(kind, options, folder, onPick = { choices.folder = it }, onAdd = { folders.add(kind, it); choices.folder = it })
         Button(
             enabled = folder != null && ticked > 0,
             onClick = {
@@ -376,8 +396,8 @@ private fun PlaylistForm(playlist: Playlist, album: Boolean, picks: SnapshotStat
                 onDownload(
                     when (mode) {
                         PlaylistAs.Songs -> musicJobs(picks, dest, downloads.nextId(), library)
-                        PlaylistAs.Album -> albumJobs(picks, albumTitle, albumArtist, dest, downloads.nextId(), library)
-                        PlaylistAs.Book -> bookJobs(picks.filter { it.include }.map { it.video }, bookTitle, author, narrator, dest, downloads.nextId())
+                        PlaylistAs.Album -> albumJobs(picks, choices.albumTitle, choices.albumArtist, dest, downloads.nextId(), library)
+                        PlaylistAs.Book -> bookJobs(picks.filter { it.include }.map { it.video }, choices.bookTitle, choices.author, choices.narrator, dest, downloads.nextId())
                     },
                     kind,
                 )

@@ -11,11 +11,17 @@ import org.schabi.newpipe.extractor.ServiceList
 import org.schabi.newpipe.extractor.downloader.Downloader
 import org.schabi.newpipe.extractor.downloader.Request
 import org.schabi.newpipe.extractor.downloader.Response
+import org.schabi.newpipe.extractor.exceptions.ContentNotAvailableException
+import org.schabi.newpipe.extractor.exceptions.ExtractionException
+import org.schabi.newpipe.extractor.exceptions.ReCaptchaException
 import org.schabi.newpipe.extractor.playlist.PlaylistInfo
 import org.schabi.newpipe.extractor.stream.Description
 import org.schabi.newpipe.extractor.stream.StreamInfo
+import java.net.ConnectException
 import java.net.HttpURLConnection
+import java.net.SocketTimeoutException
 import java.net.URI
+import java.net.UnknownHostException
 
 data class AudioOption(val url: String, val isM4a: Boolean, val bitrate: Int)
 
@@ -67,6 +73,21 @@ object YouTube {
             }.orEmpty()
         Stream(url, chapters)
     }
+}
+
+/** Said when YouTube changed and the extractor can't read it any more: only a newer Legato (with a newer extractor) fixes that. */
+const val EXTRACTOR_BROKE = "YouTube changed something and Legato's extractor broke. Update Legato if there's a newer version on GitHub Releases."
+
+/**
+ * What to tell the user when fetching from YouTube fails: one video being unavailable, no connection, a captcha,
+ * or the extractor broken by a YouTube change. Anything else keeps its own message.
+ */
+fun youTubeError(e: Throwable, fallback: String): String = when (e) {
+    is ContentNotAvailableException -> e.message ?: "This video isn't available"
+    is ReCaptchaException -> "YouTube is asking this network for a captcha. Try again later, or on another network."
+    is ExtractionException -> EXTRACTOR_BROKE
+    is UnknownHostException, is SocketTimeoutException, is ConnectException -> "Couldn't reach YouTube. Check the internet and try again."
+    else -> e.message ?: fallback
 }
 
 /** NewPipe's network hook, on plain HttpURLConnection; a desktop browser's User-Agent gets the regular web pages. */
