@@ -38,8 +38,12 @@ android {
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
             signingConfig = legatoKey
         }
-        // Same key for debug, so a dev build installs over the release (and back) without wiping the app's data.
-        debug { legatoKey?.let { signingConfig = it } }
+        // A separate app, "Legato Debug", beside the real one: trying a build never touches the real playlists.
+        debug {
+            applicationIdSuffix = ".debug"
+            versionNameSuffix = "-debug"
+            legatoKey?.let { signingConfig = it }
+        }
     }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11

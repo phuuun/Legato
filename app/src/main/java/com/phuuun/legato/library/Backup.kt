@@ -70,7 +70,11 @@ class Backups(
     private val folders: FolderStore,
     private val progress: ProgressStore,
     private val bookmarks: BookmarkStore,
-    val file: File = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "Legato backup.json"),
+    // Legato Debug keeps its own file, so it never writes over the real app's backup.
+    val file: File = File(
+        Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS),
+        if (context.packageName.endsWith(".debug")) "Legato Debug backup.json" else "Legato backup.json",
+    ),
     /** Every audio file MediaStore knows, id → path. */
     private val audioPaths: suspend () -> Map<Long, String> = { mediaStorePaths(context) },
 ) {
