@@ -20,5 +20,7 @@ class BookmarksTest {
         store.save(a.copy(color = 4))
         store.delete(2)
         assertEquals(listOf(a.copy(color = 4)), store.bookmarks.first())
+        store.move(7, 9)
+        assertEquals(listOf(9L), store.bookmarks.first().map { it.trackId })
     }
 }

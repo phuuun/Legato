@@ -17,11 +17,12 @@ import java.nio.ByteBuffer
 data class Chapter(val title: String, val startMs: Long)
 
 /**
- * The chapters inside one file, best source first: the file's own chapter marks (MP4/M4B, MP3, or Vorbis-style
+ * The chapters of one file, best source first: a list saved in Legato ([saved], see EditStore), then the file's own chapter marks (MP4/M4B, MP3, or Vorbis-style
  * CHAPTERnnn tags in FLAC/Ogg/Opus), then a timestamp list in its comment (what the converter writes, and what
  * YouTube descriptions look like), and for a long file with neither, 30-minute parts so it can still be skipped through.
  */
-suspend fun readChapters(path: String, durationMs: Long): List<Chapter> = withContext(Dispatchers.IO) {
+suspend fun readChapters(path: String, durationMs: Long, saved: String? = null): List<Chapter> = withContext(Dispatchers.IO) {
+    if (saved != null) return@withContext chaptersFromText(saved)
     val file = File(path)
     val embedded = runCatching {
         RandomAccessFile(file, "r").use { f ->

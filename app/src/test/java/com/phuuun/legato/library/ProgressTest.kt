@@ -57,5 +57,7 @@ class ProgressTest {
         val store = ProgressStore(ApplicationProvider.getApplicationContext())
         store.save(7, positionMs = 1_234, now = 99)
         assertEquals(mapOf(7L to Spot(1_234, 99)), store.spots().first())
+        store.move(7, 8)
+        assertEquals(mapOf(8L to Spot(1_234, 99)), store.spots().first())
     }
 }

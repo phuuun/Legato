@@ -19,9 +19,12 @@ typealias Edits = Map<String, Map<String, String>>
 
 const val COVER = "COVER"
 
+/** A book's chapter list, as timestamp lines ("1:02:03 Title"): from the converter, the chapter editor or Chapterfy. */
+const val CHAPTERS = "CHAPTERS"
+
 /**
- * What Edit, Bulk fix and album reorder change. Kept in Legato only: the files are never written, so an edit can't
- * damage one (a tag write once broke an audiobook's index). Other apps keep showing the files' own tags.
+ * What Edit, Bulk fix, album reorder, the chapter editor and the converter set. Kept in Legato only: files are never
+ * written, so an edit can't damage one (tag writes once garbled an audiobook). Other apps keep showing the files' own tags.
  */
 class EditStore(context: Context) {
     private val prefs: SharedPreferences = context.getSharedPreferences("edits", Context.MODE_PRIVATE)

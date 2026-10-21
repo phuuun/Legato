@@ -62,6 +62,12 @@ class ChaptersTest {
     }
 
     @Test
+    fun a_list_saved_in_legato_comes_first() = kotlinx.coroutines.test.runTest {
+        assertEquals(listOf(Chapter("Prologue", 0), Chapter("Chapter 1", 65_000)), readChapters("/nonexistent.m4a", 0, "0:00:00 Prologue\n0:01:05 Chapter 1"))
+        assertEquals(emptyList<Chapter>(), readChapters("/nonexistent.m4a", 99 * 60_000L, ""))
+    }
+
+    @Test
     fun long_files_without_chapters_get_parts() {
         assertEquals(emptyList<Chapter>(), autoParts(40 * 60_000L))
         assertEquals(listOf(Chapter("Part 1", 0), Chapter("Part 2", 1_800_000), Chapter("Part 3", 3_600_000)), autoParts(61 * 60_000L))

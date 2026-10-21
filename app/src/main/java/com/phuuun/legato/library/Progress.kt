@@ -30,6 +30,9 @@ class ProgressStore(context: Context) {
     }.distinctUntilChanged()
 
     fun save(trackId: Long, positionMs: Long, now: Long) = prefs.edit { putString(trackId.toString(), "$positionMs:$now") }
+
+    /** A replaced file's spot goes to the file replacing it. */
+    fun move(old: Long, new: Long) = prefs.getString(old.toString(), null)?.let { spot -> prefs.edit { putString(new.toString(), spot); remove(old.toString()) } }
 }
 
 private fun finished(chapter: Track, spot: Spot) = chapter.durationMs > 0 && spot.positionMs >= chapter.durationMs - 1_000

@@ -16,7 +16,6 @@ import com.phuuun.legato.library.PlaylistRepository
 import com.phuuun.legato.library.ProgressStore
 import com.phuuun.legato.library.WhenEmpty
 import com.phuuun.legato.library.db.LegatoDb
-import com.phuuun.legato.library.edit.TagWriter
 import com.phuuun.legato.playback.EqStore
 import com.phuuun.legato.playback.PlayerConnection
 import com.phuuun.legato.ui.components.AudioCoverFetcher
@@ -29,7 +28,6 @@ class LegatoApp : Application(), SingletonImageLoader.Factory {
     val library: LibraryRepository by lazy { MediaStoreLibrary(this, folders.folders(FolderKind.Music), WhenEmpty.AllMusic, folders.hidden, edits.edits) }
     val audiobooks: LibraryRepository by lazy { MediaStoreLibrary(this, folders.folders(FolderKind.Audiobooks), WhenEmpty.Nothing, folders.hidden, edits.edits) }
     val player by lazy { PlayerConnection(this) }
-    val tagWriter by lazy { TagWriter(this) }
     val progress by lazy { ProgressStore(this) }
     val bookmarks by lazy { BookmarkStore(this) }
     val eq by lazy { EqStore(this) }

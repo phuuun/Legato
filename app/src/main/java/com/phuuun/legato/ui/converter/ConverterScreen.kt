@@ -69,6 +69,7 @@ import com.phuuun.legato.converter.Playlist
 import com.phuuun.legato.converter.YouTubeLink
 import com.phuuun.legato.converter.albumJobs
 import com.phuuun.legato.converter.bookJobs
+import com.phuuun.legato.converter.findBook
 import com.phuuun.legato.converter.findDuplicate
 import com.phuuun.legato.converter.guessAlbum
 import com.phuuun.legato.converter.isAlbumPlaylist
@@ -173,7 +174,7 @@ class ConverterState(private val scope: CoroutineScope) {
 
 /** Link in, preview with guessed tags, pick where it goes, download; the queue below shows what's happening. */
 @Composable
-fun ConverterScreen(state: ConverterState, initialLink: String?, onInitialLinkUsed: () -> Unit, folders: FolderStore, downloads: DownloadQueue, library: List<Track>) {
+fun ConverterScreen(state: ConverterState, initialLink: String?, onInitialLinkUsed: () -> Unit, folders: FolderStore, downloads: DownloadQueue, library: List<Track>, audiobooks: List<Track>) {
     val context = LocalContext.current
     val clipboard = LocalClipboard.current
     val scope = rememberCoroutineScope()
@@ -234,7 +235,7 @@ fun ConverterScreen(state: ConverterState, initialLink: String?, onInitialLinkUs
                         TextButton(onClick = { loadPlaylist(f.link.playlist!!) }) { Text("Whole playlist") }
                     }
                 }
-                is Fetch.One -> VideoCard(f.video, folders, downloads, library) { batch, kind -> queue(batch, kind) }
+                is Fetch.One -> VideoCard(f.video, folders, downloads, library, audiobooks) { batch, kind -> queue(batch, kind) }
                 is Fetch.Many -> Unit
             }
         }
@@ -252,7 +253,7 @@ fun ConverterScreen(state: ConverterState, initialLink: String?, onInitialLinkUs
 }
 
 @Composable
-private fun VideoCard(video: Video, folders: FolderStore, downloads: DownloadQueue, library: List<Track>, onDownload: (List<DownloadJob>, FolderKind) -> Unit) {
+private fun VideoCard(video: Video, folders: FolderStore, downloads: DownloadQueue, library: List<Track>, audiobooks: List<Track>, onDownload: (List<DownloadJob>, FolderKind) -> Unit) {
     var kind by rememberSaveable { mutableStateOf(FolderKind.Music) }
     val song = remember(video) { guessSong(video.title, video.uploader) }
     val book = remember(video) { guessBook(video.title) }
@@ -262,6 +263,7 @@ private fun VideoCard(video: Video, folders: FolderStore, downloads: DownloadQue
     var author by rememberSaveable(video) { mutableStateOf(book.author) }
     var narrator by rememberSaveable(video) { mutableStateOf("") }
     var replace by rememberSaveable(video) { mutableStateOf(true) }
+    val oldBook = remember(bookTitle, audiobooks) { findBook(bookTitle, audiobooks) }
     val choices by remember(kind) { folders.folders(kind) }.collectAsState(emptySet())
     var folder by remember(kind, choices) { mutableStateOf(folders.lastFolder(kind)?.takeIf { it in choices } ?: choices.sorted().firstOrNull()) }
 
@@ -275,11 +277,12 @@ private fun VideoCard(video: Video, folders: FolderStore, downloads: DownloadQue
         if (kind == FolderKind.Music) {
             Field("Artist", artist) { artist = it }
             Field("Title", title) { title = it }
-            ReplaceBox(artist, title, library, replace) { replace = it }
+            ReplaceBox(remember(artist, title, library) { findDuplicate(artist, title, library) }, replace) { replace = it }
         } else {
             Field("Book title", bookTitle) { bookTitle = it }
             Field("Author", author) { author = it }
             Field("Narrator", narrator) { narrator = it }
+            ReplaceBox(oldBook, replace) { replace = it }
         }
         Destination(kind, choices, folder, onPick = { folder = it }, onAdd = { folders.add(kind, it); folder = it })
         Button(
@@ -288,7 +291,7 @@ private fun VideoCard(video: Video, folders: FolderStore, downloads: DownloadQue
                 val dest = folder ?: return@Button
                 onDownload(
                     if (kind == FolderKind.Music) musicJobs(listOf(PickedVideo(video, artist, title, true, replace)), dest, downloads.nextId(), library)
-                    else bookJobs(listOf(video), bookTitle, author, narrator, dest, downloads.nextId()),
+                    else bookJobs(listOf(video), bookTitle, author, narrator, dest, downloads.nextId(), oldBook?.takeIf { replace }),
                     kind,
                 )
             },
@@ -366,7 +369,7 @@ private fun PickRow(i: Int, p: PickedVideo, kind: FolderKind, picks: SnapshotSta
             if (kind == FolderKind.Music && p.include) {
                 Field("Artist", p.artist) { picks[i] = p.copy(artist = it) }
                 Field("Title", p.title) { picks[i] = p.copy(title = it) }
-                ReplaceBox(p.artist, p.title, library, p.replace) { picks[i] = p.copy(replace = it) }
+                ReplaceBox(remember(p.artist, p.title, library) { findDuplicate(p.artist, p.title, library) }, p.replace) { picks[i] = p.copy(replace = it) }
             }
         }
     }
@@ -399,10 +402,10 @@ private fun PlaylistFoot(choices: PlaylistChoices, picks: SnapshotStateList<Pick
     }
 }
 
-/** Shown only when the song is already on the phone: ticked, the download takes its place and the old file is hidden (see DownloadService). */
+/** Shown only when the song or book is already on the phone: ticked, the download takes its place and the old file is hidden (see DownloadService). */
 @Composable
-private fun ReplaceBox(artist: String, title: String, library: List<Track>, replace: Boolean, onReplace: (Boolean) -> Unit) {
-    val old = remember(artist, title, library) { findDuplicate(artist, title, library) } ?: return
+private fun ReplaceBox(old: Track?, replace: Boolean, onReplace: (Boolean) -> Unit) {
+    old ?: return
     Row(Modifier.clickable { onReplace(!replace) }, verticalAlignment = Alignment.CenterVertically) {
         Checkbox(replace, onCheckedChange = onReplace)
         Text(
@@ -449,7 +452,7 @@ private fun JobRow(job: DownloadJob, onRetry: () -> Unit) {
                 Text("Downloading ${s.percent}%", style = MaterialTheme.typography.bodyMedium, color = muted)
                 LinearProgressIndicator(progress = { s.percent / 100f }, modifier = Modifier.fillMaxWidth().padding(top = 4.dp))
             }
-            JobState.Tagging -> Text("Adding tags and cover…", style = MaterialTheme.typography.bodyMedium, color = muted)
+            JobState.Tagging -> Text("Saving…", style = MaterialTheme.typography.bodyMedium, color = muted)
             JobState.Done -> Text("Saved to ${job.folder.trimEnd('/')}", style = MaterialTheme.typography.bodyMedium, color = muted)
             is JobState.Failed -> Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(s.reason, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.error, modifier = Modifier.weight(1f))

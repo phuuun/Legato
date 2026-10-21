@@ -1,6 +1,7 @@
 package com.phuuun.legato.converter
 
 import com.phuuun.legato.library.Track
+import com.phuuun.legato.library.albumTag
 import com.phuuun.legato.library.splitArtists
 import com.phuuun.legato.library.edit.BookEdit
 import com.phuuun.legato.library.edit.MusicEdit
@@ -14,6 +15,12 @@ fun findDuplicate(artist: String, title: String, library: List<Track>): Track? {
     val names = splitArtists(artist).map { it.lowercase() }.toSet()
     val t = title.trim().lowercase()
     return library.firstOrNull { it.title.trim().lowercase() == t && it.artists.map { a -> a.lowercase() }.toSet() == names }
+}
+
+/** The one-file book in [audiobooks] with this title, ignoring case and spacing: what converting it again replaces. */
+fun findBook(title: String, audiobooks: List<Track>): Track? {
+    val t = title.trim().lowercase()
+    return audiobooks.filter { it.albumTag.ifEmpty { it.title }.trim().lowercase() == t }.singleOrNull()
 }
 
 private fun PickedVideo.duplicateIn(library: List<Track>) = if (replace) findDuplicate(artist, title, library) else null
@@ -37,10 +44,10 @@ fun albumJobs(picked: List<PickedVideo>, album: String, albumArtist: String, fol
  * One video is a one-file book. Several are one book: they share the book title (ALBUM), keep their
  * video titles as chapter titles, and are numbered in order so the Audiobooks tab lists them that way.
  */
-fun bookJobs(videos: List<Video>, bookTitle: String, author: String, narrator: String, folder: String, firstId: Long): List<DownloadJob> {
+fun bookJobs(videos: List<Video>, bookTitle: String, author: String, narrator: String, folder: String, firstId: Long, replaces: Track? = null): List<DownloadJob> {
     if (videos.size == 1) {
         val v = videos.single()
-        return listOf(DownloadJob(firstId, v.url, bookTitle, folder, bookFileName(bookTitle), BookEdit(bookTitle, null, author, narrator).properties(), v.thumbnail))
+        return listOf(DownloadJob(firstId, v.url, bookTitle, folder, bookFileName(bookTitle), BookEdit(bookTitle, null, author, narrator).properties(), v.thumbnail, replaces))
     }
     return videos.mapIndexed { i, v ->
         val properties = BookEdit(bookTitle, v.title, author, narrator).properties() + ("TRACKNUMBER" to "${i + 1}")

@@ -10,7 +10,9 @@ import androidx.media3.common.util.Util
 import androidx.media3.session.MediaController
 import com.phuuun.legato.library.Bookmark
 import com.phuuun.legato.library.BookmarkStore
+import com.phuuun.legato.library.CHAPTERS
 import com.phuuun.legato.library.Chapter
+import com.phuuun.legato.library.Edits
 import com.phuuun.legato.library.readChapters
 import com.phuuun.legato.playback.SleepTimer
 import com.phuuun.legato.playback.path
@@ -20,7 +22,9 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
@@ -53,7 +57,7 @@ data class BackSpot(val index: Int, val positionMs: Long)
 
 /** Null state means nothing is queued, so the mini player hides. */
 @OptIn(UnstableApi::class)
-class NowPlayingViewModel(val controller: StateFlow<MediaController?>, val sleep: SleepTimer, private val bookmarkStore: BookmarkStore) : ViewModel() {
+class NowPlayingViewModel(val controller: StateFlow<MediaController?>, val sleep: SleepTimer, private val bookmarkStore: BookmarkStore, edits: Flow<Edits>) : ViewModel() {
 
     @kotlin.OptIn(ExperimentalCoroutinesApi::class)
     val state: StateFlow<NowPlayingState?> = controller.filterNotNull().flatMapLatest { c ->
@@ -81,10 +85,11 @@ class NowPlayingViewModel(val controller: StateFlow<MediaController?>, val sleep
 
     private val c get() = controller.value
 
-    /** The chapters inside the book file playing (see readChapters); empty for music. Read once per file. */
+    /** The chapters of the book file playing (see readChapters); empty for music. Read once per file, and again when its saved list changes. */
     @kotlin.OptIn(ExperimentalCoroutinesApi::class)
     val chapters: StateFlow<List<Chapter>> = state.map { s -> s?.takeIf { it.isAudiobook }?.path }.distinctUntilChanged()
-        .mapLatest { path -> path?.let { readChapters(it, c?.currentMediaItem?.mediaMetadata?.durationMs ?: 0) }.orEmpty() }
+        .combine(edits) { path, e -> path to path?.let { e[it]?.get(CHAPTERS) } }.distinctUntilChanged()
+        .mapLatest { (path, saved) -> path?.let { readChapters(it, c?.currentMediaItem?.mediaMetadata?.durationMs ?: 0, saved) }.orEmpty() }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     val bookmarks: StateFlow<List<Bookmark>> = bookmarkStore.bookmarks.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())

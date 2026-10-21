@@ -225,7 +225,7 @@ fun LegatoNav(library: LibraryRepository, audiobooks: LibraryRepository, player:
     // One view model for every destination, so the loaded library and the search box survive navigation.
     val vm: LibraryViewModel = viewModel(factory = viewModelFactory { initializer { LibraryViewModel(library, folders.sort, playlistRepo.stats) } })
     val state by vm.state.collectAsState()
-    val nowPlayingVm: NowPlayingViewModel = viewModel(factory = viewModelFactory { initializer { NowPlayingViewModel(player.controller, player.sleep, bookmarks) } })
+    val nowPlayingVm: NowPlayingViewModel = viewModel(factory = viewModelFactory { initializer { NowPlayingViewModel(player.controller, player.sleep, bookmarks, edits.edits) } })
     val now by nowPlayingVm.state.collectAsState()
     var expanded by rememberSaveable { mutableStateOf(false) }
     // Like YT Music: picking a song opens the full player; swiping it down leaves the mini player.
@@ -413,7 +413,7 @@ fun LegatoNav(library: LibraryRepository, audiobooks: LibraryRepository, player:
                                         }
                                     }
                                 }
-                                Section.Converter -> ConverterScreen(converter, sharedLink, onSharedLinkUsed, folders, downloads, state.tracks)
+                                Section.Converter -> ConverterScreen(converter, sharedLink, onSharedLinkUsed, folders, downloads, state.tracks, audiobookTracks.orEmpty())
                             }
                         }
                     }

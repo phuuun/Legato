@@ -30,4 +30,16 @@ class DuplicatesTest {
         assertEquals(listOf(7L, null), jobs.map { it.replaces?.id })
         assertEquals(7L, albumJobs(listOf(PickedVideo(v, "Tame Impala", "Let It Happen", true)), "Currents", "Tame Impala", "Music/", 1, library).single().replaces?.id)
     }
+
+    @Test
+    fun a_book_matches_a_one_file_book_by_title_only() {
+        val books = listOf(
+            trackFromRow(20, "The Inheritance Games by Jennifer Lynn Barnes", "J", "The Inheritance Games", 3, 1000, "i.m4a", relativePath = "Download/AUDIOBOOKS/"),
+            trackFromRow(21, "Ch 1", "F", "Dune", 4, 1000, "d1.m4a", relativePath = "Download/AUDIOBOOKS/"),
+            trackFromRow(22, "Ch 2", "F", "Dune", 4, 1000, "d2.m4a", relativePath = "Download/AUDIOBOOKS/"),
+        )
+        assertEquals(20L, findBook(" the inheritance games", books)?.id)
+        assertNull(findBook("Dune", books)) // chapter files aren't replaced by one file
+        assertEquals(20L, bookJobs(listOf(Video("u", "v", "c", 60, null)), "The Inheritance Games", "J", "", "Download/AUDIOBOOKS/", 1, books[0]).single().replaces?.id)
+    }
 }

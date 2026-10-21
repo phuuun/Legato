@@ -36,4 +36,7 @@ class BookmarkStore(context: Context) {
     fun delete(id: Long) = prefs.edit { remove(id.toString()) }
 
     fun clear() = prefs.edit { clear() }
+
+    /** A replaced file's bookmarks go to the file replacing it. */
+    fun move(old: Long, new: Long) = read().filter { it.trackId == old }.forEach { save(it.copy(trackId = new)) }
 }

@@ -13,6 +13,7 @@ import android.os.Environment
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
 import com.phuuun.legato.LegatoApp
+import com.phuuun.legato.library.CHAPTERS
 import com.phuuun.legato.library.formatTimestamp
 import com.phuuun.legato.library.edit.CoverChange
 import com.phuuun.legato.library.edit.coverFromUrl
@@ -34,12 +35,14 @@ private const val CHUNK = 8L * 1024 * 1024
 private const val CHANNEL = "downloads"
 private const val NOTIFICATION = 2
 
-// Work in progress is hidden (dot prefix, so MediaStore ignores it) but keeps ".m4a" so TagLib sees an MP4.
+// Work in progress is hidden: MediaStore ignores dot files.
 private const val PART = ".legato-part-"
 
 /**
  * Works through [DownloadQueue] one job at a time, in the foreground so it survives leaving the app:
- * fresh stream link → 8 MB range chunks into a hidden file → tags and cover → rename into place → MediaStore scan.
+ * fresh stream link → 8 MB range chunks into a hidden file → rename into place → tags, cover and chapters saved in
+ * Legato (see EditStore) → MediaStore scan. The file is kept exactly as downloaded: tagging a big file in place once
+ * garbled an audiobook.
  * A failure deletes the hidden file and leaves the job for Retry.
  */
 class DownloadService : Service() {
@@ -99,20 +102,21 @@ class DownloadService : Service() {
                 }
             }
             queue.set(job.id, JobState.Tagging)
-            updateNotification("Tagging ${job.label}", null)
+            updateNotification("Saving ${job.label}", null)
             val cover = job.thumbnail?.let { coverFromUrl(it) }?.let { CoverChange.Set(it) } ?: CoverChange.Keep
-            // Chapters go in the comment as a timestamp list: a tag TagLib writes in every format, readable by
-            // people too, and what readChapters falls back to when a file has no chapter marks of its own.
             val chapters = stream.chapters.takeIf { it.size >= 2 }?.joinToString("\n") { "${formatTimestamp(it.startMs)} ${it.title}" }
-            val properties = if (chapters != null) job.properties + ("COMMENT" to chapters) else job.properties
-            if (!app.tagWriter.write(part.path, properties, cover, rescan = false)) error("Couldn't write the tags")
+            val properties = if (chapters != null) job.properties + (CHAPTERS to chapters) else job.properties
             val target = File(dir, name)
             if (!part.renameTo(target)) error("Couldn't save the file")
+            app.edits.save(target.path, properties, cover)
             val uri = scan(target.path)
-            // A replaced song hands its playlist spots and plays to the new file and is hidden in Legato, never deleted:
-            // Legato doesn't touch files it didn't make. Settings → Hidden brings it back.
+            // A replaced file hands its playlist spots, plays, listening spot and bookmarks to the new one and is hidden
+            // in Legato, never deleted: Legato doesn't touch files it didn't make. Settings → Hidden brings it back.
             if (old != null && uri != null) {
-                app.playlists.moveTrack(old.id, ContentUris.parseId(uri))
+                val new = ContentUris.parseId(uri)
+                app.playlists.moveTrack(old.id, new)
+                app.progress.move(old.id, new)
+                app.bookmarks.move(old.id, new)
                 app.folders.hide(listOf(old.path))
             }
             queue.set(job.id, JobState.Done)
