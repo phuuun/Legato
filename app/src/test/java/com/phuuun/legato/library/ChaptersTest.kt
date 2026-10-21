@@ -67,6 +67,21 @@ class ChaptersTest {
         assertEquals(emptyList<Chapter>(), readChapters("/nonexistent.m4a", 99 * 60_000L, ""))
     }
 
+    // Positions and sizes as ffprobe reports them for the same file: Chapterfy feeds the decoder from this table.
+    @Test
+    fun audio_samples_match_ffprobe() {
+        val t = mp4AudioSamples(File(javaClass.classLoader!!.getResource("chapters/book.m4b")!!.toURI()).path)!!
+        assertEquals(48, t.sizes.size)
+        assertEquals(listOf(111L to 19, 130L to 4, 134L to 4), (0..2).map { t.offsets[it] to t.sizes[it] })
+        assertEquals(314L to 4, t.offsets.last() to t.sizes.last())
+        assertEquals(0, t.indexAt(0))
+        assertEquals(1, t.indexAt(1)) // between samples: the next one
+        assertEquals(t.sizes.size, t.indexAt(Long.MAX_VALUE / 1_000_000))
+        val third = t.startUs(3)
+        assertEquals(3, t.indexAt(third))
+        assertEquals(null, mp4AudioSamples(File(javaClass.classLoader!!.getResource("chapters/book.mp3")!!.toURI()).path))
+    }
+
     @Test
     fun long_files_without_chapters_get_parts() {
         assertEquals(emptyList<Chapter>(), autoParts(40 * 60_000L))

@@ -40,6 +40,14 @@ class SpokenChaptersTest {
     }
 
     @Test
+    fun a_missed_chapter_stays_a_gap_and_nothing_is_renumbered() {
+        val heard = listOf(Chapter("Chapter 1", 2_000), Chapter("Chapter 3", 900_000), Chapter("Chapter 4", 1_500_000))
+        assertEquals(listOf("Chapter 1", "Chapter 3", "Chapter 4"), chapterList(heard).map { it.title })
+        // Saved and read back, too.
+        assertEquals(listOf("Chapter 1", "Chapter 3", "Chapter 4"), chaptersFromText(chapterList(heard).asText()).map { it.title })
+    }
+
+    @Test
     fun speech_after_a_long_pause_only() {
         val p = PauseFinder(pauseFrames = 3)
         assertFalse(p.speechStarts(-20f))

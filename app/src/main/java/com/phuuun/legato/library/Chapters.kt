@@ -132,20 +132,23 @@ private fun List<Box>.find(type: String) = firstOrNull { it.type == type }
 private fun path(b: ByteBuffer, root: Box, vararg types: String): Box? =
     types.fold(root as Box?) { box, t -> box?.let { boxes(b, it.body, it.end).find(t) } }
 
-internal fun mp4Chapters(f: RandomAccessFile): List<Chapter> {
-    // Find moov among the top-level boxes without reading the audio, then load just moov.
+/** The moov box, found among the top-level boxes without reading the audio; null when the file has none. */
+private fun readMoov(f: RandomAccessFile): ByteBuffer? {
     var at = 0L
-    var moov: ByteBuffer? = null
     while (at + 8 <= f.length()) {
         f.seek(at)
         var size = f.readInt().toLong() and 0xffffffffL
         val type = ByteArray(4).also { f.readFully(it) }.toString(Charsets.ISO_8859_1)
         if (size == 1L) size = f.readLong() else if (size == 0L) size = f.length() - at
         if (size < 8) break
-        if (type == "moov") { moov = ByteBuffer.wrap(ByteArray(size.toInt()).also { f.seek(at); f.readFully(it) }); break }
+        if (type == "moov") return ByteBuffer.wrap(ByteArray(size.toInt()).also { f.seek(at); f.readFully(it) })
         at += size
     }
-    val b = moov ?: return emptyList()
+    return null
+}
+
+internal fun mp4Chapters(f: RandomAccessFile): List<Chapter> {
+    val b = readMoov(f) ?: return emptyList()
     val root = boxes(b, 0, b.capacity()).find("moov") ?: return emptyList()
     return appleChapters(f, b, root).takeIf { it.size >= 2 } ?: neroChapters(b, root)
 }
@@ -164,47 +167,81 @@ private fun neroChapters(b: ByteBuffer, moov: Box): List<Chapter> {
     }.named()
 }
 
+/** Where each sample of one track sits in the file, how big it is, and when it starts (in [timescale] units). */
+class SampleTable(val offsets: LongArray, val sizes: IntArray, val starts: LongArray, val timescale: Long) {
+    fun startUs(i: Int) = starts[i] * 1_000_000 / timescale
+
+    /** The first sample starting at or after [us]; the count when there's none. */
+    fun indexAt(us: Long): Int {
+        val i = starts.binarySearch((us * timescale + 999_999) / 1_000_000) // rounded up: at or after
+        return if (i >= 0) i else -i - 1
+    }
+}
+
+/**
+ * The audio track's samples of a plain MP4/M4A, for reading them without MediaExtractor (see Chapterfy). Null for a
+ * fragmented file, whose samples are listed in its fragments instead, or anything that isn't an MP4.
+ */
+fun mp4AudioSamples(file: String): SampleTable? = runCatching {
+    RandomAccessFile(File(file), "r").use { f ->
+        val b = readMoov(f) ?: return@use null
+        val root = boxes(b, 0, b.capacity()).find("moov") ?: return@use null
+        val trak = boxes(b, root.body, root.end).filter { it.type == "trak" }.firstOrNull { t ->
+            path(b, t, "mdia", "hdlr")?.let { h -> String(ByteArray(4) { b.get(h.body + 8 + it) }, Charsets.ISO_8859_1) } == "soun"
+        } ?: return@use null
+        sampleTable(b, trak)?.takeIf { it.sizes.isNotEmpty() }
+    }
+}.getOrNull()
+
+private fun sampleTable(b: ByteBuffer, trak: Box): SampleTable? {
+    val mdhd = path(b, trak, "mdia", "mdhd") ?: return null
+    val timescale = b.getInt(mdhd.body + if (b.get(mdhd.body).toInt() == 1) 20 else 12).toLong().takeIf { it > 0 } ?: return null
+    val stbl = path(b, trak, "mdia", "minf", "stbl") ?: return null
+    val inside = boxes(b, stbl.body, stbl.end)
+
+    // Sample sizes (stsz), then start times from the run-length durations in stts.
+    val stsz = inside.find("stsz") ?: return null
+    val fixed = b.getInt(stsz.body + 4)
+    val sizes = IntArray(b.getInt(stsz.body + 8)) { if (fixed != 0) fixed else b.getInt(stsz.body + 12 + it * 4) }
+    val stts = inside.find("stts") ?: return null
+    val starts = LongArray(sizes.size)
+    var t = 0L
+    var s = 0
+    for (e in 0 until b.getInt(stts.body + 4)) {
+        val n = b.getInt(stts.body + 8 + e * 8)
+        val delta = b.getInt(stts.body + 12 + e * 8).toLong() and 0xffffffffL
+        repeat(n) { if (s < starts.size) starts[s++] = t; t += delta }
+    }
+    // File offset of each sample: chunk offsets (stco/co64), samples per chunk (stsc).
+    val chunks = inside.find("stco")?.let { c -> LongArray(b.getInt(c.body + 4)) { (b.getInt(c.body + 8 + it * 4).toLong() and 0xffffffffL) } }
+        ?: inside.find("co64")?.let { c -> LongArray(b.getInt(c.body + 4)) { b.getLong(c.body + 8 + it * 8) } } ?: return null
+    val stsc = inside.find("stsc") ?: return null
+    val runs = List(b.getInt(stsc.body + 4)) { b.getInt(stsc.body + 8 + it * 12) to b.getInt(stsc.body + 12 + it * 12) }
+    val offsets = LongArray(sizes.size)
+    var next = 0
+    var run = 0
+    for (i in chunks.indices) {
+        while (run + 1 < runs.size && runs[run + 1].first <= i + 1) run++
+        val perChunk = runs.getOrNull(run)?.takeIf { it.first <= i + 1 }?.second ?: continue
+        var o = chunks[i]
+        repeat(perChunk) { if (next < sizes.size) { offsets[next] = o; o += sizes[next]; next++ } }
+    }
+    return SampleTable(offsets, sizes, starts, timescale)
+}
+
 /** The text track the audio track points at through tref/chap: one sample per chapter, timed by the track. */
 private fun appleChapters(f: RandomAccessFile, b: ByteBuffer, moov: Box): List<Chapter> {
     val traks = boxes(b, moov.body, moov.end).filter { it.type == "trak" }
     fun trackId(trak: Box): Int? = path(b, trak, "tkhd")?.let { t -> b.getInt(t.body + if (b.get(t.body).toInt() == 1) 20 else 12) }
     val chapterIds = traks.mapNotNull { path(b, it, "tref", "chap") }.flatMap { c -> (c.body until c.end step 4).map { b.getInt(it) } }.toSet()
     val trak = traks.firstOrNull { trackId(it) in chapterIds } ?: return emptyList()
-    val mdhd = path(b, trak, "mdia", "mdhd") ?: return emptyList()
-    val timescale = b.getInt(mdhd.body + if (b.get(mdhd.body).toInt() == 1) 20 else 12).toLong().takeIf { it > 0 } ?: return emptyList()
-    val stbl = path(b, trak, "mdia", "minf", "stbl") ?: return emptyList()
-    val inside = boxes(b, stbl.body, stbl.end)
-
-    // Start time of each sample, from the run-length durations in stts.
-    val stts = inside.find("stts") ?: return emptyList()
-    val starts = mutableListOf<Long>()
-    var t = 0L
-    for (e in 0 until b.getInt(stts.body + 4)) {
-        val n = b.getInt(stts.body + 8 + e * 8)
-        val delta = b.getInt(stts.body + 12 + e * 8).toLong() and 0xffffffffL
-        repeat(n) { starts += t; t += delta }
-    }
-    // File offset of each sample: chunk offsets (stco/co64), samples per chunk (stsc), sample sizes (stsz).
-    val stsz = inside.find("stsz") ?: return emptyList()
-    val fixed = b.getInt(stsz.body + 4)
-    val sizes = List(b.getInt(stsz.body + 8)) { if (fixed != 0) fixed else b.getInt(stsz.body + 12 + it * 4) }
-    val chunks = inside.find("stco")?.let { c -> List(b.getInt(c.body + 4)) { (b.getInt(c.body + 8 + it * 4).toLong() and 0xffffffffL) } }
-        ?: inside.find("co64")?.let { c -> List(b.getInt(c.body + 4)) { b.getLong(c.body + 8 + it * 8) } } ?: return emptyList()
-    val stsc = inside.find("stsc") ?: return emptyList()
-    val runs = List(b.getInt(stsc.body + 4)) { b.getInt(stsc.body + 8 + it * 12) to b.getInt(stsc.body + 12 + it * 12) }
-    val offsets = mutableListOf<Long>()
-    for ((i, chunkStart) in chunks.withIndex()) {
-        val perChunk = runs.lastOrNull { it.first <= i + 1 }?.second ?: continue
-        var o = chunkStart
-        repeat(perChunk) { if (offsets.size < sizes.size) { offsets += o; o += sizes[offsets.size - 1] } }
-    }
+    val table = sampleTable(b, trak) ?: return emptyList()
     // Each sample: a 16-bit length, then the title (UTF-8, or UTF-16 with a byte-order mark).
-    return offsets.indices.mapNotNull { i ->
-        val start = starts.getOrNull(i) ?: return@mapNotNull null
-        f.seek(offsets[i])
+    return table.sizes.indices.map { i ->
+        f.seek(table.offsets[i])
         val len = f.readUnsignedShort()
         val raw = ByteArray(len).also { f.readFully(it) }
         val title = if (len >= 2 && raw[0] == 0xFE.toByte() && raw[1] == 0xFF.toByte()) String(raw, Charsets.UTF_16) else String(raw, Charsets.UTF_8)
-        Chapter(title, start * 1000 / timescale)
+        Chapter(title, table.starts[i] * 1000 / table.timescale)
     }.named()
 }

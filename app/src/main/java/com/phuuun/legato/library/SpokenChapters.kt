@@ -68,7 +68,12 @@ fun loudnessDb(sumOfSquares: Double, count: Int): Float =
 // ponytail: a fixed threshold; a book with music or hiss under the reading never goes quiet enough. Learn the noise
 // floor from the first minutes if one turns up.
 /** Fed one 50 ms frame's loudness at a time; true on the first loud frame after a pause of at least [pauseFrames]. */
-class PauseFinder(private val pauseFrames: Int = 30, private val silentDb: Float = -40f) {
+class PauseFinder(private val pauseFrames: Int = 30, private val silentDb: Float = SILENT_DB) {
+    companion object {
+        /** Quieter than this is silence. */
+        const val SILENT_DB = -40f
+    }
+
     private var quiet = 0
 
     fun speechStarts(db: Float): Boolean {

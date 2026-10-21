@@ -117,13 +117,15 @@ fun ChapterfyDialog(vm: NowPlayingViewModel, path: String, onClose: () -> Unit) 
             },
             confirmButton = { TextButton(onClick = chapterfy::cancel) { Text("Cancel") } },
         )
+        // A share, not a position: the book is listened to in several stretches at once.
         is Chapterfy.State.Listening -> AlertDialog(
             onDismissRequest = onClose,
             title = { Text(if (state.path == path) "Listening…" else "Listening to another book…") },
             text = {
+                val share = if (state.totalMs > 0) state.doneMs.toFloat() / state.totalMs else 0f
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    LinearProgressIndicator(progress = { if (state.totalMs > 0) state.doneMs.toFloat() / state.totalMs else 0f }, modifier = Modifier.fillMaxWidth())
-                    Text("${formatTime(state.doneMs)} of ${formatTime(state.totalMs)} · ${state.found} chapters so far", color = muted)
+                    LinearProgressIndicator(progress = { share }, modifier = Modifier.fillMaxWidth())
+                    Text("${(share * 100).toInt()}% · ${state.found} chapters so far", color = muted)
                 }
             },
             confirmButton = { TextButton(onClick = onClose) { Text("Hide") } },
