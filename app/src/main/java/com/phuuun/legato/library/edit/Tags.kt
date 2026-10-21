@@ -25,11 +25,11 @@ fun BookEdit.properties(): Map<String, String> = mapOf(
 )
 
 /**
- * A new album order as tags: track numbers 1…n, for the tracks whose number changes. The disc number goes, so
- * the numbers alone decide (MediaStore counts disc 1 track 3 as 1003).
+ * A new album order as track numbers 1…n, for the tracks whose number changes. A saved number replaces MediaStore's
+ * whole, disc included (it counts disc 1 track 3 as 1003), so the numbers alone decide.
  */
 fun renumber(ordered: List<Track>): List<Pair<Track, Map<String, String>>> =
-    ordered.mapIndexedNotNull { i, t -> if (t.trackNumber == i + 1) null else t to mapOf("TRACKNUMBER" to "${i + 1}", "DISCNUMBER" to "") }
+    ordered.mapIndexedNotNull { i, t -> if (t.trackNumber == i + 1) null else t to mapOf("TRACKNUMBER" to "${i + 1}") }
 
 sealed interface CoverChange {
     data object Keep : CoverChange

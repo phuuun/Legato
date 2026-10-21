@@ -13,11 +13,15 @@ import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
+import java.util.Base64
 
 data class SavedPlaylist(val name: String, val createdAt: Long, val paths: List<String>)
 data class SavedBookmark(val path: String, val positionMs: Long, val color: Int, val caption: String)
 data class SavedSpot(val path: String, val positionMs: Long, val updatedAt: Long)
 data class SavedPlays(val path: String, val count: Int, val lastPlayedAt: Long)
+
+/** [tags] as EditStore keeps them; a picked cover travels as its JPEG. */
+class SavedEdit(val path: String, val tags: Map<String, String>, val cover: ByteArray?)
 
 /** Everything Legato keeps that the music files don't, by file path: MediaStore ids change on a new phone or a reindex. */
 data class BackupData(
@@ -30,6 +34,7 @@ data class BackupData(
     val musicFolders: Set<String>,
     val audiobookFolders: Set<String>,
     val sort: String,
+    val edits: List<SavedEdit> = emptyList(),
 )
 
 fun BackupData.toJson(): String = JSONObject()
@@ -40,6 +45,9 @@ fun BackupData.toJson(): String = JSONObject()
     .put("plays", JSONArray(plays.map { JSONObject().put("path", it.path).put("count", it.count).put("lastPlayedAt", it.lastPlayedAt) }))
     .put("hidden", JSONArray(hidden.sorted())).put("musicFolders", JSONArray(musicFolders.sorted())).put("audiobookFolders", JSONArray(audiobookFolders.sorted()))
     .put("sort", sort)
+    .put("edits", JSONArray(edits.map { e ->
+        JSONObject().put("path", e.path).put("tags", JSONObject(e.tags)).apply { e.cover?.let { put("cover", Base64.getEncoder().encodeToString(it)) } }
+    }))
     .toString(2)
 
 private fun JSONArray.objects() = List(length()) { getJSONObject(it) }
@@ -57,6 +65,11 @@ fun backupFromJson(text: String): BackupData {
         o.getJSONArray("plays").objects().map { SavedPlays(it.getString("path"), it.getInt("count"), it.getLong("lastPlayedAt")) },
         o.getJSONArray("hidden").strings().toSet(), o.getJSONArray("musicFolders").strings().toSet(), o.getJSONArray("audiobookFolders").strings().toSet(),
         o.getString("sort"),
+        // Backups from before Legato kept its own edits have none.
+        o.optJSONArray("edits")?.objects()?.map { e ->
+            val tags = e.getJSONObject("tags")
+            SavedEdit(e.getString("path"), tags.keys().asSequence().associateWith { tags.getString(it) }, e.optString("cover").ifEmpty { null }?.let { Base64.getDecoder().decode(it) })
+        }.orEmpty(),
     )
 }
 
@@ -70,6 +83,7 @@ class Backups(
     private val folders: FolderStore,
     private val progress: ProgressStore,
     private val bookmarks: BookmarkStore,
+    private val edits: EditStore,
     // Legato Debug keeps its own file, so it never writes over the real app's backup.
     val file: File = File(
         Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS),
@@ -123,11 +137,15 @@ class Backups(
             db.stats().all().mapNotNull { s -> paths[s.mediaStoreId]?.let { SavedPlays(it, s.playCount, s.lastPlayedAt) } },
             folders.hidden.first(), folders.folders(FolderKind.Music).first(), folders.folders(FolderKind.Audiobooks).first(),
             folders.sort.first().name,
+            edits.all().map { (path, tags) ->
+                val cover = tags[COVER]?.takeIf { it.isNotEmpty() }
+                SavedEdit(path, if (cover != null) tags - COVER else tags, cover?.let { File(it) }?.takeIf { it.exists() }?.readBytes())
+            },
         )
     }
 
     /**
-     * Replaces playlists, bookmarks, folders and hidden files with the backup's; adds its listening spots and play counts.
+     * Replaces playlists, bookmarks, edits, folders and hidden files with the backup's; adds its listening spots and play counts.
      * Returns how many of its playlists' songs aren't on this phone (yet): those are left out.
      */
     suspend fun restore(data: BackupData): Int = withContext(Dispatchers.IO) {
@@ -142,6 +160,7 @@ class Backups(
         data.bookmarks.forEachIndexed { i, b -> ids[b.path]?.let { bookmarks.save(Bookmark(data.createdAt + i, it, b.positionMs, b.color, b.caption)) } }
         data.spots.forEach { s -> ids[s.path]?.let { progress.save(it, s.positionMs, s.updatedAt) } }
         db.stats().put(data.plays.mapNotNull { s -> ids[s.path]?.let { PlayStat(it, s.count, s.lastPlayedAt) } })
+        edits.replaceAll(data.edits.associate { it.path to it.tags }, data.edits.mapNotNull { e -> e.cover?.let { e.path to it } }.toMap())
         folders.setHidden(data.hidden)
         folders.setFolders(FolderKind.Music, data.musicFolders)
         folders.setFolders(FolderKind.Audiobooks, data.audiobookFolders)

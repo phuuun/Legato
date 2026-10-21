@@ -21,7 +21,7 @@ class BackupTest {
     private val previous = File(context.cacheDir, "Legato backup (previous).json").also { it.delete() }
 
     private fun backups(db: LegatoDb, paths: Map<Long, String>) =
-        Backups(context, db, FolderStore(context), ProgressStore(context), BookmarkStore(context), file) { paths }
+        Backups(context, db, FolderStore(context), ProgressStore(context), BookmarkStore(context), EditStore(context), file) { paths }
 
     private fun db() = Room.inMemoryDatabaseBuilder(context, LegatoDb::class.java).allowMainThreadQueries().build()
 
@@ -38,6 +38,7 @@ class BackupTest {
         folders.hide(listOf("/m/b.mp3"))
         folders.add(FolderKind.Audiobooks, "Books/")
         folders.setSort(Sort.Recent)
+        EditStore(context).save("/b/book.m4b", mapOf("COMPOSER" to "Christie Moreau"), com.phuuun.legato.library.edit.CoverChange.Set(byteArrayOf(1, 2, 3)))
 
         val first = backups(db1, before)
         assertFalse(first.fromBefore)
@@ -49,6 +50,7 @@ class BackupTest {
         context.getSharedPreferences("progress", 0).edit().clear().commit()
         context.getSharedPreferences("settings", 0).edit().clear().commit()
         context.getSharedPreferences("backup", 0).edit().clear().commit()
+        context.getSharedPreferences("edits", 0).edit().clear().commit()
         val db2 = db()
         val after = backups(db2, mapOf(11L to "/m/a.mp3", 12L to "/m/b.mp3", 13L to "/b/book.m4b"))
         assertTrue(after.fromBefore)
@@ -66,6 +68,9 @@ class BackupTest {
         assertEquals(setOf("/m/b.mp3"), FolderStore(context).hidden.first())
         assertEquals(setOf("Books/"), FolderStore(context).folders(FolderKind.Audiobooks).first())
         assertEquals(Sort.Recent, FolderStore(context).sort.first())
+        val edit = EditStore(context).all().getValue("/b/book.m4b")
+        assertEquals("Christie Moreau", edit["COMPOSER"])
+        assertEquals(listOf<Byte>(1, 2, 3), File(edit.getValue(COVER)).readBytes().toList())
         assertFalse(after.fromBefore)
         db1.close(); db2.close()
     }

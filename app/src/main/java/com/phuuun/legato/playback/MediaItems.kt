@@ -13,7 +13,8 @@ private const val PATH = "path"
  * The media id is the MediaStore id, so any queued item maps back to its track.
  * No artworkUri on purpose: Media3 "loads" it by reading the whole resource into memory, and the cover
  * link is the audio file itself (a 300 MB WAV, a 600 MB audiobook). Embedded art still reaches the
- * notification as artworkData pulled from the stream; Legato's own screens read [coverUri].
+ * notification as artworkData pulled from the stream; Legato's own screens read [coverUri]. A cover picked in Edit is a
+ * small JPEG of Legato's, so it does go in artworkUri, where it replaces the embedded one on the lock screen too.
  */
 /** [audiobook] marks the item so the playback service saves its spot (see ProgressStore). */
 fun Track.toMediaItem(audiobook: Boolean = false): MediaItem = MediaItem.Builder()
@@ -23,6 +24,7 @@ fun Track.toMediaItem(audiobook: Boolean = false): MediaItem = MediaItem.Builder
         MediaMetadata.Builder().setTitle(title).setArtist(artist).setAlbumTitle(album)
             .setMediaType(if (audiobook) MediaMetadata.MEDIA_TYPE_AUDIO_BOOK_CHAPTER else null)
             .setDurationMs(durationMs)
+            .setArtworkUri(artUri?.takeIf { it.scheme == "file" })
             .setExtras(bundleOf(COVER to artUri?.toString(), PATH to path)).build(),
     )
     .build()

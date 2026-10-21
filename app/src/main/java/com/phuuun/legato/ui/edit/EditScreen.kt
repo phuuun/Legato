@@ -61,7 +61,7 @@ import com.phuuun.legato.ui.library.Empty
 import kotlinx.coroutines.launch
 
 /**
- * Edits the tags in one file. Music: title, artists, album. Audiobooks: book title, chapter title (books
+ * Edits one file's tags as Legato shows them; the file itself stays as it is (see EditStore). Music: title, artists, album. Audiobooks: book title, chapter title (books
  * with several files only), author, narrator. Both: the cover. A song with no artist opens pre-filled
  * with a guess from its title.
  */

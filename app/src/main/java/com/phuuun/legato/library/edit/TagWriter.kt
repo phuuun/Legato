@@ -9,7 +9,6 @@ import android.net.Uri
 import android.os.ParcelFileDescriptor
 import com.kyant.taglib.Picture
 import com.kyant.taglib.TagLib
-import com.phuuun.legato.library.Track
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
@@ -48,10 +47,11 @@ suspend fun coverFromUrl(url: String): ByteArray? = withContext(Dispatchers.IO) 
     }.getOrNull()
 }
 
-/** Writes tags and cover into the file itself (all files access), then has MediaStore re-read it; its id stays the same. */
+/**
+ * Writes tags and cover into a file, then has MediaStore re-read it; its id stays the same. Only the converter uses it, on
+ * the new file it downloaded: an edit made in Legato stays in Legato (see EditStore).
+ */
 class TagWriter(private val context: Context) {
-    suspend fun write(track: Track, properties: Map<String, String>, cover: CoverChange): Boolean = write(track.path, properties, cover)
-
     /** [rescan] false for a file that isn't in its final place yet (the converter renames it first). */
     suspend fun write(path: String, properties: Map<String, String>, cover: CoverChange, rescan: Boolean = true): Boolean = withContext(Dispatchers.IO) {
         val saved = try {

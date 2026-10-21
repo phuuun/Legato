@@ -3,6 +3,8 @@ package com.phuuun.legato.library
 import android.content.ContentUris
 import android.net.Uri
 import android.provider.MediaStore
+import java.io.File
+import kotlin.math.absoluteValue
 
 data class Track(
     val id: Long,
@@ -44,7 +46,9 @@ fun splitArtists(tag: String): List<String> = tag.split(';', ',').map { it.trim(
 /**
  * Blank tags get a label instead of an empty row; a blank title falls back to the file name.
  * Several artists, written "A; B" or "A, B", are shown as "A, B".
- * The cover is the file's own embedded picture, versioned by its modified time so an edit shows up at once.
+ * The cover is the file's own embedded picture, versioned by its modified time so a retagged file shows up at once.
+ * [edit] (see EditStore) goes over what the file says; a renamed album gets an id of its own, since MediaStore's
+ * belongs to the old name.
  */
 fun trackFromRow(
     id: Long,
@@ -61,25 +65,35 @@ fun trackFromRow(
     modified: Long = 0,
     added: Long = 0,
     albumArtist: String? = null,
+    edit: Map<String, String> = emptyMap(),
 ): Track {
     val uri = ContentUris.withAppendedId(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, id)
-    val artists = splitArtists(artist.orEmpty()).filter { it != MediaStore.UNKNOWN_STRING }
+    val artists = splitArtists(edit["ARTIST"] ?: artist.orEmpty()).filter { it != MediaStore.UNKNOWN_STRING }
+    // Edit offers the album tag, blank for an untagged file (whose MediaStore album is its folder): saving it unchanged isn't a rename.
+    val albumTag = album.takeUnless { it == MediaStore.UNKNOWN_STRING || it == relativePath.trimEnd('/').substringAfterLast('/') }.orEmpty()
+    val editedAlbum = edit["ALBUM"]?.takeIf { it != albumTag }
+    // ponytail: hash ids could collide (1 in ~4 billion); store a counter if two albums ever merge.
+    val editedAlbumId = editedAlbum?.let { -1L - "${it.lowercase()}\u0000$relativePath".hashCode().toLong().absoluteValue }
     return Track(
         id = id,
-        title = title?.takeIf { it.isNotBlank() } ?: displayName.substringBeforeLast('.'),
+        title = (edit["TITLE"] ?: title)?.takeIf { it.isNotBlank() } ?: displayName.substringBeforeLast('.'),
         artist = artists.joinToString(", ").ifEmpty { "Unknown artist" },
-        album = album?.takeIf { it.isNotBlank() } ?: "Unknown album",
-        albumId = albumId,
+        album = (editedAlbum ?: album)?.takeIf { it.isNotBlank() } ?: "Unknown album",
+        albumId = editedAlbumId ?: albumId,
         durationMs = durationMs,
         uri = uri,
-        artUri = uri.buildUpon().appendQueryParameter("v", modified.toString()).build(),
-        trackNumber = trackNumber,
+        artUri = when (val cover = edit[COVER]) {
+            null -> uri.buildUpon().appendQueryParameter("v", modified.toString()).build()
+            "" -> null
+            else -> Uri.fromFile(File(cover))
+        },
+        trackNumber = edit["TRACKNUMBER"]?.toIntOrNull() ?: trackNumber,
         path = path,
         relativePath = relativePath,
-        composer = composer?.takeIf { it != MediaStore.UNKNOWN_STRING }.orEmpty(),
+        composer = (edit["COMPOSER"] ?: composer)?.takeIf { it != MediaStore.UNKNOWN_STRING }.orEmpty(),
         modified = modified,
         artists = artists,
         added = added,
-        albumArtists = splitArtists(albumArtist.orEmpty()).filter { it != MediaStore.UNKNOWN_STRING },
+        albumArtists = splitArtists(edit["ALBUMARTIST"] ?: albumArtist.orEmpty()).filter { it != MediaStore.UNKNOWN_STRING },
     )
 }

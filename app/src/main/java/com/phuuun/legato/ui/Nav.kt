@@ -68,8 +68,7 @@ import com.phuuun.legato.library.ProgressStore
 import com.phuuun.legato.library.chapterStart
 import com.phuuun.legato.library.resumePoint
 import com.phuuun.legato.library.asAlbum
-import com.phuuun.legato.library.edit.CoverChange
-import com.phuuun.legato.library.edit.TagWriter
+import com.phuuun.legato.library.EditStore
 import com.phuuun.legato.library.edit.fixRows
 import com.phuuun.legato.library.edit.properties
 import com.phuuun.legato.library.edit.renumber
@@ -216,7 +215,7 @@ private fun SlidingNavHost(nav: NavHostController, start: String, modifier: Modi
  * Edit and Bulk fix are full screens above the pages.
  */
 @Composable
-fun LegatoNav(library: LibraryRepository, audiobooks: LibraryRepository, player: PlayerConnection, playlistRepo: PlaylistRepository, folders: FolderStore, tagWriter: TagWriter, progress: ProgressStore, bookmarks: BookmarkStore, backups: Backups, eq: EqStore, downloads: DownloadQueue,
+fun LegatoNav(library: LibraryRepository, audiobooks: LibraryRepository, player: PlayerConnection, playlistRepo: PlaylistRepository, folders: FolderStore, edits: EditStore, progress: ProgressStore, bookmarks: BookmarkStore, backups: Backups, eq: EqStore, downloads: DownloadQueue,
     sharedLink: String?, onSharedLinkUsed: () -> Unit, openPlayer: Boolean, onPlayerOpened: () -> Unit,
 ) {
     val root = rememberNavController()
@@ -351,12 +350,9 @@ fun LegatoNav(library: LibraryRepository, audiobooks: LibraryRepository, player:
                                     composable("album/{id}", listOf(navArgument("id") { type = NavType.LongType })) { e ->
                                         val id = e.arguments?.getLong("id")
                                         val album = state.albums.firstOrNull { it.id == id }
-                                        // A new order goes into the files as track numbers; MediaStore's re-read shows it.
+                                        // A new order is saved as track numbers, in Legato only (see EditStore).
                                         val saveOrder = { tracks: List<Track> ->
-                                            scope.launch {
-                                                val failed = renumber(tracks).count { (t, p) -> !tagWriter.write(t, p, CoverChange.Keep) }
-                                                toast(if (failed == 0) "Order saved" else "Couldn't save $failed of the tracks")
-                                            }
+                                            scope.launch { renumber(tracks).forEach { (t, p) -> edits.save(t.path, p) } }
                                             Unit
                                         }
                                         AlbumScreen(album, onBack = { musicNav.popBackStack() }, onPlay = onPlay, actions = actions, onReorder = saveOrder) {
@@ -430,13 +426,13 @@ fun LegatoNav(library: LibraryRepository, audiobooks: LibraryRepository, player:
                         track, if (book != null) FolderKind.Audiobooks else FolderKind.Music, book?.chapters?.size ?: 1, onBack = { root.popBackStack() },
                         onSave = { properties, cover ->
                             // Pops Edit itself, never the screen below it, in case Edit was already left while saving.
-                            scope.launch { if (track != null && tagWriter.write(track, properties, cover)) root.popBackStack("edit/{id}", inclusive = true) else toast("Couldn't save ${track?.title}") }
+                            scope.launch { if (track != null) { edits.save(track.path, properties, cover); root.popBackStack("edit/{id}", inclusive = true) } }
                         },
                     )
                 }
                 composable("fix") {
                     val rows = remember { fixRows(state.tracks) }
-                    BulkFixScreen(rows, onBack = { root.popBackStack() }, write = { t, e -> tagWriter.write(t, e.properties(), CoverChange.Keep) })
+                    BulkFixScreen(rows, onBack = { root.popBackStack() }, write = { t, e -> edits.save(t.path, e.properties()); true })
                 }
                 composable("settings") {
                     SettingsScreen(onBack = { root.popBackStack() }) { section ->
