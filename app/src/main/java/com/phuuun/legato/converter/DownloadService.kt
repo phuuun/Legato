@@ -14,7 +14,8 @@ import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
 import com.phuuun.legato.LegatoApp
 import com.phuuun.legato.library.CHAPTERS
-import com.phuuun.legato.library.formatTimestamp
+import com.phuuun.legato.library.Chapter
+import com.phuuun.legato.library.asText
 import com.phuuun.legato.library.edit.CoverChange
 import com.phuuun.legato.library.edit.coverFromUrl
 import kotlinx.coroutines.CancellationException
@@ -104,7 +105,7 @@ class DownloadService : Service() {
             queue.set(job.id, JobState.Tagging)
             updateNotification("Saving ${job.label}", null)
             val cover = job.thumbnail?.let { coverFromUrl(it) }?.let { CoverChange.Set(it) } ?: CoverChange.Keep
-            val chapters = stream.chapters.takeIf { it.size >= 2 }?.joinToString("\n") { "${formatTimestamp(it.startMs)} ${it.title}" }
+            val chapters = stream.chapters.takeIf { it.size >= 2 }?.map { Chapter(it.title, it.startMs) }?.asText()
             val properties = if (chapters != null) job.properties + (CHAPTERS to chapters) else job.properties
             val target = File(dir, name)
             if (!part.renameTo(target)) error("Couldn't save the file")

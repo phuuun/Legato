@@ -12,7 +12,9 @@ import com.phuuun.legato.library.Bookmark
 import com.phuuun.legato.library.BookmarkStore
 import com.phuuun.legato.library.CHAPTERS
 import com.phuuun.legato.library.Chapter
-import com.phuuun.legato.library.Edits
+import com.phuuun.legato.library.Chapterfy
+import com.phuuun.legato.library.EditStore
+import com.phuuun.legato.library.asText
 import com.phuuun.legato.library.readChapters
 import com.phuuun.legato.playback.SleepTimer
 import com.phuuun.legato.playback.path
@@ -22,7 +24,6 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.SharingStarted
@@ -57,7 +58,7 @@ data class BackSpot(val index: Int, val positionMs: Long)
 
 /** Null state means nothing is queued, so the mini player hides. */
 @OptIn(UnstableApi::class)
-class NowPlayingViewModel(val controller: StateFlow<MediaController?>, val sleep: SleepTimer, private val bookmarkStore: BookmarkStore, edits: Flow<Edits>) : ViewModel() {
+class NowPlayingViewModel(val controller: StateFlow<MediaController?>, val sleep: SleepTimer, private val bookmarkStore: BookmarkStore, private val edits: EditStore, val chapterfy: Chapterfy) : ViewModel() {
 
     @kotlin.OptIn(ExperimentalCoroutinesApi::class)
     val state: StateFlow<NowPlayingState?> = controller.filterNotNull().flatMapLatest { c ->
@@ -88,9 +89,20 @@ class NowPlayingViewModel(val controller: StateFlow<MediaController?>, val sleep
     /** The chapters of the book file playing (see readChapters); empty for music. Read once per file, and again when its saved list changes. */
     @kotlin.OptIn(ExperimentalCoroutinesApi::class)
     val chapters: StateFlow<List<Chapter>> = state.map { s -> s?.takeIf { it.isAudiobook }?.path }.distinctUntilChanged()
-        .combine(edits) { path, e -> path to path?.let { e[it]?.get(CHAPTERS) } }.distinctUntilChanged()
+        .combine(edits.edits) { path, e -> path to path?.let { e[it]?.get(CHAPTERS) } }.distinctUntilChanged()
         .mapLatest { (path, saved) -> path?.let { readChapters(it, c?.currentMediaItem?.mediaMetadata?.durationMs ?: 0, saved) }.orEmpty() }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    /** Whether the book file playing has its own chapter list saved in Legato, which Reset drops. */
+    val chaptersSaved: StateFlow<Boolean> = state.map { it?.path }.distinctUntilChanged()
+        .combine(edits.edits) { path, e -> path != null && e[path]?.containsKey(CHAPTERS) == true }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
+
+    fun saveChapters(path: String, chapters: List<Chapter>) { viewModelScope.launch { edits.save(path, mapOf(CHAPTERS to chapters.asText())) } }
+
+    fun resetChapters(path: String) = edits.forget(path, CHAPTERS)
+
+    fun useChapterfy(done: Chapterfy.State.Done) { viewModelScope.launch { chapterfy.use(done) } }
 
     val bookmarks: StateFlow<List<Bookmark>> = bookmarkStore.bookmarks.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 

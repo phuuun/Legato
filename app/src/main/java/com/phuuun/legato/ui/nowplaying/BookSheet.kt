@@ -9,11 +9,13 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material3.AlertDialog
@@ -59,6 +61,9 @@ fun BookSheet(state: NowPlayingState, vm: NowPlayingViewModel, onDismiss: () -> 
     val bookmarks by vm.bookmarks.collectAsState()
     var tab by rememberSaveable { mutableIntStateOf(0) }
     var editing by remember { mutableStateOf<Bookmark?>(null) }
+    var editingChapters by remember { mutableStateOf(false) }
+    var chapterfyOpen by remember { mutableStateOf(false) }
+    val chaptersSaved by vm.chaptersSaved.collectAsState()
     val files = remember(state.trackId, player.mediaItemCount) { List(player.mediaItemCount) { player.getMediaItemAt(it) } }
     val playing = player.currentMediaItemIndex
     val indexOf = remember(files) { files.withIndex().associate { (i, f) -> f.mediaId.toLongOrNull() to i } }
@@ -66,7 +71,12 @@ fun BookSheet(state: NowPlayingState, vm: NowPlayingViewModel, onDismiss: () -> 
     val go = { index: Int, ms: Long -> vm.jumpTo(index, ms); onDismiss() }
 
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true), containerColor = MaterialTheme.colorScheme.surface) {
-        Row(Modifier.padding(start = 20.dp, bottom = 8.dp), horizontalArrangement = Arrangement.spacedBy(20.dp)) {
+        val path = state.path
+        if (editingChapters && path != null) {
+            ChapterEditor(chapters, state.positionMs, chaptersSaved, onSave = { vm.saveChapters(path, it) }, onReset = { vm.resetChapters(path) }, onClose = { editingChapters = false })
+            return@ModalBottomSheet
+        }
+        Row(Modifier.padding(start = 20.dp, end = 8.dp, bottom = 8.dp), horizontalArrangement = Arrangement.spacedBy(20.dp), verticalAlignment = Alignment.CenterVertically) {
             listOf("CHAPTERS", "BOOKMARKS").forEachIndexed { i, label ->
                 Text(
                     label, style = MaterialTheme.typography.labelSmall,
@@ -74,6 +84,12 @@ fun BookSheet(state: NowPlayingState, vm: NowPlayingViewModel, onDismiss: () -> 
                     color = if (tab == i) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.clickable { tab = i }.padding(vertical = 8.dp),
                 )
+            }
+            Spacer(Modifier.weight(1f))
+            // For the file playing: a book of chapter files lists its own chapters under the one playing.
+            if (tab == 0 && path != null) Row {
+                IconButton(onClick = { chapterfyOpen = true }) { Icon(Icons.Rounded.AutoAwesome, "Chapterfy: find chapters by listening") }
+                IconButton(onClick = { editingChapters = true }) { Icon(Icons.Rounded.Edit, "Edit chapters") }
             }
         }
         LazyColumn {
@@ -105,6 +121,7 @@ fun BookSheet(state: NowPlayingState, vm: NowPlayingViewModel, onDismiss: () -> 
             }
         }
     }
+    if (chapterfyOpen && state.path != null) ChapterfyDialog(vm, state.path, onClose = { chapterfyOpen = false })
     editing?.let { b ->
         BookmarkDialog(
             "Bookmark at ${formatTime(b.positionMs)}", b.caption, b.color,

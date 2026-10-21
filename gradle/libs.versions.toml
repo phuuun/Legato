@@ -11,6 +11,7 @@ media3 = "1.11.1"
 room = "2.8.5"
 ksp = "2.3.12"
 taglib = "1.0.6"
+vosk = "0.3.75"
 newpipeExtractor = "v0.26.5"
 coroutines = "1.10.2"
 junit = "4.13.2"
@@ -36,6 +37,7 @@ androidx-room-runtime = { group = "androidx.room", name = "room-runtime", versio
 androidx-room-ktx = { group = "androidx.room", name = "room-ktx", version.ref = "room" }
 androidx-room-compiler = { group = "androidx.room", name = "room-compiler", version.ref = "room" }
 taglib = { group = "io.github.kyant0", name = "taglib", version.ref = "taglib" }
+vosk = { group = "com.alphacephei", name = "vosk-android", version.ref = "vosk" }
 newpipe-extractor = { group = "com.github.TeamNewPipe", name = "NewPipeExtractor", version.ref = "newpipeExtractor" }
 kotlinx-coroutines-android = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-android", version.ref = "coroutines" }
 kotlinx-coroutines-test = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-test", version.ref = "coroutines" }

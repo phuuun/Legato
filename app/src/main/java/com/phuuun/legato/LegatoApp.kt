@@ -6,6 +6,7 @@ import coil3.PlatformContext
 import coil3.SingletonImageLoader
 import com.phuuun.legato.converter.DownloadQueue
 import com.phuuun.legato.library.Backups
+import com.phuuun.legato.library.Chapterfy
 import com.phuuun.legato.library.EditStore
 import com.phuuun.legato.library.BookmarkStore
 import com.phuuun.legato.library.FolderKind
@@ -25,6 +26,7 @@ import kotlinx.coroutines.flow.flowOf
 class LegatoApp : Application(), SingletonImageLoader.Factory {
     val folders by lazy { FolderStore(this) }
     val edits by lazy { EditStore(this) }
+    val chapterfy by lazy { Chapterfy(this, edits) }
     val library: LibraryRepository by lazy { MediaStoreLibrary(this, folders.folders(FolderKind.Music), WhenEmpty.AllMusic, folders.hidden, edits.edits) }
     val audiobooks: LibraryRepository by lazy { MediaStoreLibrary(this, folders.folders(FolderKind.Audiobooks), WhenEmpty.Nothing, folders.hidden, edits.edits) }
     val player by lazy { PlayerConnection(this) }

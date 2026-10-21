@@ -54,6 +54,12 @@ class EditStore(context: Context) {
         prefs.edit { putString(path, JSONObject(new).toString()) }
     }
 
+    /** Drops one saved value, so the file's own shows again (Reset in the chapter editor). */
+    fun forget(path: String, key: String) {
+        val left = all()[path].orEmpty() - key
+        prefs.edit { if (left.isEmpty()) remove(path) else putString(path, JSONObject(left).toString()) }
+    }
+
     /** Replaces every edit, for a restore; covers come as JPEG bytes. */
     suspend fun replaceAll(edits: Map<String, Map<String, String>>, coverJpegs: Map<String, ByteArray>) = withContext(Dispatchers.IO) {
         covers.listFiles()?.forEach { it.delete() }

@@ -87,6 +87,9 @@ fun parseTimestamp(s: String): Long? {
 /** "1:02:03" for a chapter list the converter writes and [chaptersFromText] reads back. */
 fun formatTimestamp(ms: Long): String = "%d:%02d:%02d".format(ms / 3_600_000, ms / 60_000 % 60, ms / 1000 % 60)
 
+/** Chapters as the timestamp lines Legato saves them in ("1:02:03 Title"), in order. */
+fun List<Chapter>.asText(): String = sortedBy { it.startMs }.joinToString("\n") { "${formatTimestamp(it.startMs)} ${it.title}" }
+
 private fun List<Chapter>.named() = sortedBy { it.startMs }.mapIndexed { i, c -> if (c.title.isBlank()) c.copy(title = "Chapter ${i + 1}") else c }
 
 // ---- MP3: ID3v2 CHAP frames, decoded by Media3 ----

@@ -68,6 +68,7 @@ import com.phuuun.legato.library.ProgressStore
 import com.phuuun.legato.library.chapterStart
 import com.phuuun.legato.library.resumePoint
 import com.phuuun.legato.library.asAlbum
+import com.phuuun.legato.library.Chapterfy
 import com.phuuun.legato.library.EditStore
 import com.phuuun.legato.library.edit.fixRows
 import com.phuuun.legato.library.edit.properties
@@ -215,7 +216,7 @@ private fun SlidingNavHost(nav: NavHostController, start: String, modifier: Modi
  * Edit and Bulk fix are full screens above the pages.
  */
 @Composable
-fun LegatoNav(library: LibraryRepository, audiobooks: LibraryRepository, player: PlayerConnection, playlistRepo: PlaylistRepository, folders: FolderStore, edits: EditStore, progress: ProgressStore, bookmarks: BookmarkStore, backups: Backups, eq: EqStore, downloads: DownloadQueue,
+fun LegatoNav(library: LibraryRepository, audiobooks: LibraryRepository, player: PlayerConnection, playlistRepo: PlaylistRepository, folders: FolderStore, edits: EditStore, chapterfy: Chapterfy, progress: ProgressStore, bookmarks: BookmarkStore, backups: Backups, eq: EqStore, downloads: DownloadQueue,
     sharedLink: String?, onSharedLinkUsed: () -> Unit, openPlayer: Boolean, onPlayerOpened: () -> Unit,
 ) {
     val root = rememberNavController()
@@ -225,7 +226,7 @@ fun LegatoNav(library: LibraryRepository, audiobooks: LibraryRepository, player:
     // One view model for every destination, so the loaded library and the search box survive navigation.
     val vm: LibraryViewModel = viewModel(factory = viewModelFactory { initializer { LibraryViewModel(library, folders.sort, playlistRepo.stats) } })
     val state by vm.state.collectAsState()
-    val nowPlayingVm: NowPlayingViewModel = viewModel(factory = viewModelFactory { initializer { NowPlayingViewModel(player.controller, player.sleep, bookmarks, edits.edits) } })
+    val nowPlayingVm: NowPlayingViewModel = viewModel(factory = viewModelFactory { initializer { NowPlayingViewModel(player.controller, player.sleep, bookmarks, edits, chapterfy) } })
     val now by nowPlayingVm.state.collectAsState()
     var expanded by rememberSaveable { mutableStateOf(false) }
     // Like YT Music: picking a song opens the full player; swiping it down leaves the mini player.
