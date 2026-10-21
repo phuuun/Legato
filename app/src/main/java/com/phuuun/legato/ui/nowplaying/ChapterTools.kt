@@ -1,5 +1,10 @@
 package com.phuuun.legato.ui.nowplaying
 
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -24,13 +29,16 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.toMutableStateList
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
+import androidx.core.content.ContextCompat
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.phuuun.legato.library.Chapter
@@ -74,13 +82,22 @@ fun ChapterEditor(chapters: List<Chapter>, positionMs: Long, canReset: Boolean, 
 
 /**
  * Chapterfy for the file playing (see Chapterfy): offers the speech model first, then listens, then shows what it heard
- * to use or discard. Closing the dialog doesn't stop it; the button opens it again. The screen stays on while it works.
+ * to use or discard. Closing the dialog doesn't stop it; the button opens it again. Listening goes on with Legato
+ * closed (see ChapterfyService); the model download doesn't, so the screen stays on for it.
  */
 @Composable
 fun ChapterfyDialog(vm: NowPlayingViewModel, path: String, onClose: () -> Unit) {
     val chapterfy = vm.chapterfy
     val s by chapterfy.state.collectAsState()
-    val busy = s is Chapterfy.State.Downloading || s is Chapterfy.State.Listening
+    LaunchedEffect(Unit) { chapterfy.pickUpResult() }
+    val context = LocalContext.current
+    // Listening goes on with the app closed; the notification is how it says it's done.
+    val askNotifications = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { chapterfy.start(path) }
+    val start = {
+        if (Build.VERSION.SDK_INT >= 33 && ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) askNotifications.launch(Manifest.permission.POST_NOTIFICATIONS)
+        else chapterfy.start(path)
+    }
+    val busy = s is Chapterfy.State.Downloading
     val view = LocalView.current
     DisposableEffect(busy) {
         view.keepScreenOn = busy
@@ -97,8 +114,8 @@ fun ChapterfyDialog(vm: NowPlayingViewModel, path: String, onClose: () -> Unit) 
         ) else AlertDialog(
             onDismissRequest = onClose,
             title = { Text("Chapterfy") },
-            text = { Text("Listens through this file for the narrator saying \"Chapter …\" and marks each one. A long book takes a few minutes. The chapters it finds replace the list, and Reset in Edit brings the old one back.") },
-            confirmButton = { TextButton(onClick = { chapterfy.start(path) }) { Text("Start") } },
+            text = { Text("Listens through this file for the narrator saying \"Chapter …\" and marks each one. It goes on with Legato closed; a notification says when it's done. The chapters it finds replace the list, and Reset in Edit brings the old one back.") },
+            confirmButton = { TextButton(onClick = start) { Text("Start") } },
             dismissButton = {
                 Row {
                     TextButton(onClick = { chapterfy.deleteModel(); onClose() }) { Text("Delete model (${chapterfy.modelMb} MB)") }

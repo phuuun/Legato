@@ -52,5 +52,11 @@
             android:name=".converter.DownloadService"
             android:exported="false"
             android:foregroundServiceType="dataSync" />
+        <!-- Its own process: native code that crashes on damaged audio takes only this down (see ChapterfyService). -->
+        <service
+            android:name=".library.ChapterfyService"
+            android:exported="false"
+            android:process=":chapterfy"
+            android:foregroundServiceType="dataSync" />
     </application>
 </manifest>

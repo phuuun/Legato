@@ -13,6 +13,7 @@ A player for the music and audiobooks already on your Android phone, in black an
 **Audiobooks**
 - A book is one file or a folder of chapter files, and it resumes where you stopped.
 - Chapters inside a file are read from M4B/M4A, MP3 (ID3 CHAP) and FLAC/Ogg/Opus tags; a long file without any gets 30-minute parts.
+- No chapters? Edit them by hand, or let Chapterfy find them: it listens for the narrator saying "Chapter …", on the phone (a 41 MB speech model, downloaded once), about half a minute for a 10-hour book.
 - Bookmarks with a colour and a caption, a sleep timer, playback speed, and 10-second skips with a "back to where I was" button.
 
 **Converter**
@@ -46,4 +47,4 @@ Release builds are signed only when `LEGATO_STORE_FILE`, `LEGATO_STORE_PASSWORD`
 
 ## Licence
 
-GPL-3.0, see [LICENSE](LICENSE). Legato is built on [NewPipeExtractor](https://github.com/TeamNewPipe/NewPipeExtractor) (GPL-3.0), [TagLib](https://taglib.org) through [kyant0/taglib](https://github.com/Kyant0/taglib), [AndroidX Media3](https://github.com/androidx/media), Jetpack Compose and Room (Apache-2.0), and [Coil](https://github.com/coil-kt/coil) (Apache-2.0).
+GPL-3.0, see [LICENSE](LICENSE). Legato is built on [NewPipeExtractor](https://github.com/TeamNewPipe/NewPipeExtractor) (GPL-3.0), [TagLib](https://taglib.org) through [kyant0/taglib](https://github.com/Kyant0/taglib), [AndroidX Media3](https://github.com/androidx/media), Jetpack Compose and Room (Apache-2.0), [Coil](https://github.com/coil-kt/coil) (Apache-2.0), [Vosk](https://github.com/alphacep/vosk-api) (Apache-2.0) with its small English model for Chapterfy, and [FFmpeg](https://ffmpeg.org) through [Jellyfin's Media3 FFmpeg decoder](https://github.com/jellyfin/jellyfin-androidx-media) (GPL-3.0).

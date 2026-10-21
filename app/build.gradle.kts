@@ -78,6 +78,7 @@ dependencies {
     ksp(libs.androidx.room.compiler)
     implementation(libs.taglib)
     implementation(libs.vosk)
+    implementation(libs.ffmpeg.decoder)
     implementation(libs.newpipe.extractor)
     implementation(libs.coil.compose)
     implementation(libs.kotlinx.coroutines.android)
