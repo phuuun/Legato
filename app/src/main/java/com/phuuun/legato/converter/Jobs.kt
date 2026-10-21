@@ -1,6 +1,7 @@
 package com.phuuun.legato.converter
 
 import com.phuuun.legato.library.Track
+import com.phuuun.legato.library.splitArtists
 import com.phuuun.legato.library.edit.BookEdit
 import com.phuuun.legato.library.edit.MusicEdit
 import com.phuuun.legato.library.edit.properties
@@ -10,7 +11,7 @@ data class PickedVideo(val video: Video, val artist: String, val title: String, 
 
 /** A song already in [library] with the same title and the same artists, ignoring case and spacing. */
 fun findDuplicate(artist: String, title: String, library: List<Track>): Track? {
-    val names = artist.split(';').map { it.trim().lowercase() }.filter { it.isNotEmpty() }.toSet()
+    val names = splitArtists(artist).map { it.lowercase() }.toSet()
     val t = title.trim().lowercase()
     return library.firstOrNull { it.title.trim().lowercase() == t && it.artists.map { a -> a.lowercase() }.toSet() == names }
 }

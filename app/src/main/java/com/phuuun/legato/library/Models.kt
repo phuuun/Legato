@@ -30,9 +30,13 @@ data class Album(val id: Long, val title: String, val artist: String, val artUri
 
 data class Artist(val name: String, val albums: List<Album>)
 
+// ponytail: a comma always splits, so "Tyler, The Creator" becomes two artists; keep a list of comma names if one turns up.
+/** One artist tag as its artists: "A; B" (what Edit writes) and "A, B" (typed by hand) are both two. */
+fun splitArtists(tag: String): List<String> = tag.split(';', ',').map { it.trim() }.filter { it.isNotEmpty() }
+
 /**
  * Blank tags get a label instead of an empty row; a blank title falls back to the file name.
- * Several artists are stored as "A; B" (what Edit writes) and shown as "A, B".
+ * Several artists, written "A; B" or "A, B", are shown as "A, B".
  * The cover is the file's own embedded picture, versioned by its modified time so an edit shows up at once.
  */
 fun trackFromRow(
@@ -51,7 +55,7 @@ fun trackFromRow(
     added: Long = 0,
 ): Track {
     val uri = ContentUris.withAppendedId(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, id)
-    val artists = artist.orEmpty().split(';').map { it.trim() }.filter { it.isNotEmpty() && it != MediaStore.UNKNOWN_STRING }
+    val artists = splitArtists(artist.orEmpty()).filter { it != MediaStore.UNKNOWN_STRING }
     return Track(
         id = id,
         title = title?.takeIf { it.isNotBlank() } ?: displayName.substringBeforeLast('.'),

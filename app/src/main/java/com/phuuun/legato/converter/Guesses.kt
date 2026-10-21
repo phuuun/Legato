@@ -3,6 +3,7 @@ package com.phuuun.legato.converter
 import com.phuuun.legato.library.edit.Guess
 import com.phuuun.legato.library.edit.clean
 import com.phuuun.legato.library.edit.guessFromTitle
+import com.phuuun.legato.library.splitArtists
 
 /**
  * Artist and title for a music video. YouTube Music's auto-made "Artist - Topic" channels name the artist
@@ -19,7 +20,7 @@ data class AlbumGuess(val title: String, val artist: String)
 /** YouTube Music names an album's playlist "Album - Title"; the album artist is whoever is on the most tracks. */
 fun guessAlbum(playlistName: String, artists: List<String>): AlbumGuess = AlbumGuess(
     playlistName.removePrefix("Album - ").trim(),
-    artists.flatMap { it.split(';') }.map { it.trim() }.filter { it.isNotEmpty() }.groupingBy { it }.eachCount().maxByOrNull { it.value }?.key.orEmpty(),
+    artists.flatMap(::splitArtists).groupingBy { it }.eachCount().maxByOrNull { it.value }?.key.orEmpty(),
 )
 
 data class BookGuess(val title: String, val author: String)

@@ -72,6 +72,13 @@ class GroupingTest {
     }
 
     @Test
+    fun commas_split_artists_too() {
+        val artists = groupArtists(groupAlbums(listOf(row(1, "LOVE.", 1, artist = "Kendrick Lamar, Zacari"), row(2, "DNA.", 1, artist = "Kendrick Lamar"))))
+        assertEquals(listOf("Kendrick Lamar", "Zacari"), artists.map { it.name })
+        assertEquals("Kendrick Lamar, Zacari", row(1, "LOVE.", 1, artist = "Kendrick Lamar,Zacari").artist)
+    }
+
+    @Test
     fun album_with_two_artists_appears_under_both() {
         val artists = groupArtists(groupAlbums(listOf(row(1, "X", 1, artist = "Daniel Caesar; H.E.R."), row(2, "Y", 2, artist = "H.E.R."))))
         assertEquals(listOf("Daniel Caesar", "H.E.R."), artists.map { it.name })

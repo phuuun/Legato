@@ -18,6 +18,7 @@ class DuplicatesTest {
     fun same_title_and_artist_ignoring_case_and_spaces() {
         assertEquals(7L, findDuplicate(" tame impala", "let it happen ", library)?.id)
         assertEquals(8L, findDuplicate("H.E.R.; Daniel Caesar", "Duet", library)?.id)
+        assertEquals(8L, findDuplicate("Daniel Caesar, H.E.R.", "Duet", library)?.id)
         assertNull(findDuplicate("Tame Impala", "The Less I Know the Better", library))
         assertNull(findDuplicate("Someone Else", "Let It Happen", library))
     }
