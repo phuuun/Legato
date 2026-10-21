@@ -17,11 +17,10 @@ import java.io.File
 @RunWith(RobolectricTestRunner::class)
 class BackupTest {
     private val context = ApplicationProvider.getApplicationContext<Context>()
-    private val file = File(context.cacheDir, "Legato backup.json").also { it.delete() }
-    private val previous = File(context.cacheDir, "Legato backup (previous).json").also { it.delete() }
+    private val dir = File(context.cacheDir, "downloads").also { it.deleteRecursively(); it.mkdirs() }
 
     private fun backups(db: LegatoDb, paths: Map<Long, String>) =
-        Backups(context, db, FolderStore(context), ProgressStore(context), BookmarkStore(context), EditStore(context), file) { paths }
+        Backups(context, db, FolderStore(context), ProgressStore(context), BookmarkStore(context), EditStore(context), dir) { paths }
 
     private fun db() = Room.inMemoryDatabaseBuilder(context, LegatoDb::class.java).allowMainThreadQueries().build()
 
@@ -43,7 +42,8 @@ class BackupTest {
         val first = backups(db1, before)
         assertFalse(first.fromBefore)
         first.backUp()
-        assertTrue(file.exists())
+        val file = first.file!!
+        assertTrue(file.name.matches(Regex("Legato( Debug)? backup \\d{4}-\\d{2}-\\d{2}\\.json")))
 
         // A reinstall: app data wiped, same files, new MediaStore ids.
         context.getSharedPreferences("bookmarks", 0).edit().clear().commit()
@@ -76,22 +76,41 @@ class BackupTest {
     }
 
     @Test
-    fun songs_not_on_the_phone_are_counted_and_the_backup_before_is_kept() = runTest {
+    fun songs_not_on_the_phone_are_counted_and_the_full_backup_stays() = runTest {
         val db1 = db()
         val playlist = db1.playlists().insert(com.phuuun.legato.library.db.Playlist(name = "Road trip", createdAt = 5))
         db1.playlists().edit(playlist) { it += listOf(1L, 2L) }
         val full = backups(db1, mapOf(1L to "/m/a.mp3", 2L to "/m/b.mp3"))
         full.backUp()
-        val fullText = file.readText()
+        // Made on an earlier day.
+        val old = File(dir, full.file!!.name.replace(Regex("\\d{4}-\\d{2}-\\d{2}"), "2026-01-01"))
+        full.file!!.renameTo(old)
+        old.setLastModified(1_000)
+        val fullText = old.readText()
 
         // A new phone with only one of the two songs copied over yet.
         val db2 = db()
         val partial = backups(db2, mapOf(11L to "/m/a.mp3"))
         assertEquals(1, partial.restore(backupFromJson(fullText)))
         partial.backUp()
-        assertFalse(file.readText().contains("/m/b.mp3"))
-        assertEquals(fullText, previous.readText())
+        assertFalse(partial.file!!.readText().contains("/m/b.mp3"))
+        assertEquals(fullText, old.readText())
         db1.close(); db2.close()
+    }
+
+    @Test
+    fun only_the_newest_seven_stay() = runTest {
+        val db = db()
+        val b = backups(db, emptyMap())
+        val name = b.name
+        val olds = (1..9).map { d -> File(dir, "$name 2026-01-%02d.json".format(d)).apply { writeText("{}"); setLastModified(d * 1_000L) } }
+        File(dir, "$name.json").writeText("{}") // an old undated one isn't Legato's to prune
+        b.backUp()
+        assertEquals(KEEP, dir.listFiles { f -> f.name.startsWith("$name 2") }!!.size)
+        assertFalse(olds[2].exists())
+        assertTrue(olds[3].exists())
+        assertTrue(File(dir, "$name.json").exists())
+        db.close()
     }
 
     @Test

@@ -26,6 +26,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.phuuun.legato.library.Backups
+import com.phuuun.legato.library.KEEP
 
 /**
  * Back up now, or restore: the daily backup file in Downloads (a null address), or any backup file picked by hand.
@@ -40,7 +41,7 @@ fun BackupPane(backups: Backups, backUp: (done: () -> Unit) -> Unit, restore: (U
     val pick = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri -> if (uri != null) confirming = uri }
     val muted = MaterialTheme.colorScheme.onSurfaceVariant
     key(refresh) { Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Text("Playlists, bookmarks, edits, listening progress, play counts, hidden files and folders go to Download/${backups.file.name}, once a day. It stays when Legato is uninstalled, and the one before it is kept as \"${backups.previous.name}\". After reinstalling Legato, Android hides the old backup from it: restore it with Restore from another file.", style = MaterialTheme.typography.bodyMedium, color = muted)
+        Text("Playlists, bookmarks, edits, listening progress, play counts, hidden files and folders go to Download, once a day, as \"${backups.name} <date>.json\". The last $KEEP stay, also when Legato is uninstalled. After reinstalling Legato, Android hides the old backups from it: restore one with Restore from another file.", style = MaterialTheme.typography.bodyMedium, color = muted)
         Text(
             when {
                 backups.fromBefore -> "Daily backups are paused: there's a backup from before this install. Restore it, or back up now to replace it."
@@ -50,7 +51,7 @@ fun BackupPane(backups: Backups, backUp: (done: () -> Unit) -> Unit, restore: (U
             style = MaterialTheme.typography.bodyMedium,
         )
         Button(onClick = { backUp { refresh++ } }) { Text("Back up now") }
-        if (backups.file.exists()) OutlinedButton(onClick = { confirmingDaily = true }) { Text("Restore this backup") }
+        backups.file?.let { OutlinedButton(onClick = { confirmingDaily = true }) { Text("Restore ${it.nameWithoutExtension.removePrefix(backups.name).trim()}") } }
         TextButton(onClick = { pick.launch(arrayOf("application/json", "text/plain", "application/octet-stream")) }) { Text("Restore from another file…") }
     } }
     if (confirming != null || confirmingDaily) AlertDialog(

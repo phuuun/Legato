@@ -13,7 +13,11 @@ import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
+import java.time.LocalDateTime
 import java.util.Base64
+
+/** How many daily backups stay in Downloads. */
+const val KEEP = 7
 
 data class SavedPlaylist(val name: String, val createdAt: Long, val paths: List<String>)
 data class SavedBookmark(val path: String, val positionMs: Long, val color: Int, val caption: String)
@@ -74,8 +78,9 @@ fun backupFromJson(text: String): BackupData {
 }
 
 /**
- * One backup file in Downloads, outside the app, so it outlives an uninstall. Written once a day, but never over a
- * backup this install didn't write or restore: a fresh install would otherwise replace a full backup with an empty one.
+ * A backup file a day in Downloads ("Legato backup 2026-10-21.json"), outside the app, so it outlives an uninstall; the
+ * newest [KEEP] are kept. A new name each day means a restore made before every song is on the phone never writes over
+ * the full backup it came from. No automatic backup runs while one from before this install waits to be restored.
  */
 class Backups(
     private val context: Context,
@@ -84,33 +89,27 @@ class Backups(
     private val progress: ProgressStore,
     private val bookmarks: BookmarkStore,
     private val edits: EditStore,
-    // Legato Debug keeps its own file, so it never writes over the real app's backup.
-    private val home: File = File(
-        Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS),
-        if (context.packageName.endsWith(".debug")) "Legato Debug backup.json" else "Legato backup.json",
-    ),
+    private val dir: File = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS),
     /** Every audio file MediaStore knows, id → path. */
     private val audioPaths: suspend () -> Map<Long, String> = { mediaStorePaths(context) },
 ) {
     private val prefs = context.getSharedPreferences("backup", Context.MODE_PRIVATE)
 
-    /**
-     * The backup file. After a reinstall Android hides the old install's backup from Legato and won't let it write over
-     * it, so backups go to the next free name ("Legato backup 2.json"); Restore from another file still reads the old one.
-     */
-    val file: File get() = prefs.getString("name", null)?.let { File(home.parentFile, it) } ?: home
+    // Legato Debug keeps its own files, so it never touches the real app's backups.
+    val name = if (context.packageName.endsWith(".debug")) "Legato Debug backup" else "Legato backup"
+    private val dated = Regex("${Regex.escape(name)} \\d{4}-\\d{2}-\\d{2}.*\\.json")
 
-    /**
-     * The backup before the current one. A restore made before every song is on the phone drops the missing ones,
-     * and the next daily backup would otherwise drop them from the only copy.
-     */
-    val previous: File get() = File(file.parentFile, "${file.nameWithoutExtension} (previous).json")
+    /** The daily backups Legato can see, newest first. After a reinstall Android hides the old install's files from it. */
+    private fun backups(): List<File> = dir.listFiles { f -> dated.matches(f.name) }.orEmpty().sortedByDescending { it.lastModified() }
+
+    /** The newest backup, if Legato can see one. */
+    val file: File? get() = backups().firstOrNull()
 
     /** When this install last wrote or restored the backup; 0 means never. */
     val last: Long get() = prefs.getLong("last", 0)
 
     /** A backup from before this install, waiting to be restored (and holding automatic backups off until then). */
-    val fromBefore: Boolean get() = last == 0L && file.exists()
+    val fromBefore: Boolean get() = last == 0L && file != null
 
     /** Ask about [fromBefore] once per install; Settings still offers it after "Not now". */
     val offerRestore: Boolean get() = fromBefore && !prefs.getBoolean("declined", false)
@@ -119,14 +118,17 @@ class Backups(
 
     suspend fun backUp() = withContext(Dispatchers.IO) {
         val text = collect().toJson()
-        // Written beside the old one, then swapped in, so a crash mid-write never leaves half a backup.
-        val temp = File(file.parentFile, ".${file.name}.${System.currentTimeMillis()}.tmp")
+        val now = LocalDateTime.now()
+        // Written beside, then swapped in, so a crash mid-write never leaves half a backup. Today's own file is replaced;
+        // one Legato can't replace (an old install's, after a reinstall today) gets a time on the new name instead.
+        val temp = File(dir, ".$name.${System.currentTimeMillis()}.tmp")
         temp.writeText(text)
-        if (file.exists()) file.renameTo(previous)
-        val saved = (sequenceOf(file) + (2..20).asSequence().map { File(home.parentFile, "${home.nameWithoutExtension} $it.json") })
-            .firstOrNull { !it.exists() && temp.renameTo(it) }
+        val today = File(dir, "$name ${now.toLocalDate()}.json")
+        if (today.exists()) today.delete()
+        val saved = listOf(today, File(dir, "$name ${now.toLocalDate()} ${"%02d%02d".format(now.hour, now.minute)}.json")).firstOrNull { temp.renameTo(it) }
         if (saved == null) { temp.delete(); error("Couldn't save the backup") }
-        prefs.edit { putLong("last", System.currentTimeMillis()); putString("name", saved.name) }
+        backups().drop(KEEP).forEach { it.delete() }
+        prefs.edit { putLong("last", System.currentTimeMillis()) }
     }
 
     suspend fun daily() {

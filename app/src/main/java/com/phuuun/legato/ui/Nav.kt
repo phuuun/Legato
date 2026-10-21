@@ -258,7 +258,7 @@ fun LegatoNav(library: LibraryRepository, audiobooks: LibraryRepository, player:
         scope.launch {
             val missing = runCatching {
                 val text = withContext(Dispatchers.IO) {
-                    if (uri == null) backups.file.readText() else context.contentResolver.openInputStream(uri)!!.use { it.reader().readText() }
+                    if (uri == null) backups.file!!.readText() else context.contentResolver.openInputStream(uri)!!.use { it.reader().readText() }
                 }
                 backups.restore(backupFromJson(text))
             }.getOrNull()
@@ -501,7 +501,7 @@ fun LegatoNav(library: LibraryRepository, audiobooks: LibraryRepository, player:
     if (offerRestore) AlertDialog(
         onDismissRequest = { offerRestore = false; backups.decline() },
         title = { Text("Restore your backup?") },
-        text = { Text("There's a Legato backup from ${DateUtils.getRelativeTimeSpanString(backups.file.lastModified())} in Downloads: playlists, bookmarks, listening progress and folders.") },
+        text = { Text("There's a Legato backup from ${DateUtils.getRelativeTimeSpanString(backups.file?.lastModified() ?: 0)} in Downloads: playlists, bookmarks, listening progress and folders.") },
         confirmButton = { TextButton(onClick = { offerRestore = false; restoreFrom(null) {} }) { Text("Restore") } },
         dismissButton = { TextButton(onClick = { offerRestore = false; backups.decline() }) { Text("Not now") } },
     )

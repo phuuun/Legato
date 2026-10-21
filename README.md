@@ -18,7 +18,7 @@ A player for the music and audiobooks already on your Android phone, in black an
 **Converter**
 - Paste or share a video link and save its audio as an M4A straight into your music or audiobook folder, with its title, cover and chapters kept in Legato. Playlists work too.
 
-Everything stays on the phone: no account, no ads, no tracking. Playlists, bookmarks, edits and progress back up once a day to `Download/Legato backup.json`.
+Everything stays on the phone: no account, no ads, no tracking. Playlists, bookmarks, edits and progress back up once a day to `Download/Legato backup <date>.json`; the last 7 are kept.
 
 ## Install
 
