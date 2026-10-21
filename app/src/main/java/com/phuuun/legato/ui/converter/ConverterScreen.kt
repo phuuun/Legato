@@ -177,6 +177,7 @@ fun ConverterScreen(state: ConverterState, initialLink: String?, onInitialLinkUs
     val context = LocalContext.current
     val clipboard = LocalClipboard.current
     val scope = rememberCoroutineScope()
+    // The clipboard is read only when the paste button is tapped, never on its own.
     val copied = suspend { clipboard.getClipEntry()?.clipData?.takeIf { it.itemCount > 0 }?.getItemAt(0)?.text?.toString() }
     var link by state::link
     val fetch = state.fetch
@@ -188,11 +189,6 @@ fun ConverterScreen(state: ConverterState, initialLink: String?, onInitialLinkUs
     val loadPlaylist = state::loadPlaylist
     LaunchedEffect(initialLink) {
         if (initialLink != null) { link = initialLink; load(initialLink); onInitialLinkUsed() }
-    }
-    // Opening the tab with a YouTube link already copied offers it; the clipboard is only read here, never in the background.
-    var suggestion by remember { mutableStateOf<String?>(null) }
-    LaunchedEffect(Unit) {
-        if (initialLink == null && link.isBlank()) suggestion = copied()?.takeIf { parseYouTube(it) != null }
     }
 
     fun queue(batch: List<DownloadJob>, kind: FolderKind) {
@@ -224,9 +220,6 @@ fun ConverterScreen(state: ConverterState, initialLink: String?, onInitialLinkUs
         item {
             when (val f = fetch) {
                 Fetch.Idle -> Column(Modifier.padding(20.dp)) {
-                    suggestion?.let { s ->
-                        TextButton(onClick = { link = s; suggestion = null; load(s) }) { Text("Paste $s", maxLines = 1, overflow = TextOverflow.Ellipsis) }
-                    }
                     Text(
                         "Paste a YouTube link, or share one to Legato from the YouTube app.", style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
