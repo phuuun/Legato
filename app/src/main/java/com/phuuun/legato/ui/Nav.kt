@@ -257,13 +257,20 @@ fun LegatoNav(library: LibraryRepository, audiobooks: LibraryRepository, player:
     }
     val restoreFrom = { uri: Uri?, done: () -> Unit ->
         scope.launch {
-            val restored = runCatching {
+            val missing = runCatching {
                 val text = withContext(Dispatchers.IO) {
                     if (uri == null) backups.file.readText() else context.contentResolver.openInputStream(uri)!!.use { it.reader().readText() }
                 }
                 backups.restore(backupFromJson(text))
-            }.isSuccess
-            toast(if (restored) "Restored" else "That file isn't a Legato backup")
+            }.getOrNull()
+            toast(
+                when (missing) {
+                    null -> "That file isn't a Legato backup"
+                    0 -> "Restored"
+                    1 -> "Restored. 1 song in the playlists isn't on this phone"
+                    else -> "Restored. $missing songs in the playlists aren't on this phone"
+                },
+            )
             done()
         }
         Unit

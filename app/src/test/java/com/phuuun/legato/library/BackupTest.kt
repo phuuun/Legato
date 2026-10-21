@@ -18,6 +18,7 @@ import java.io.File
 class BackupTest {
     private val context = ApplicationProvider.getApplicationContext<Context>()
     private val file = File(context.cacheDir, "Legato backup.json").also { it.delete() }
+    private val previous = File(context.cacheDir, "Legato backup (previous).json").also { it.delete() }
 
     private fun backups(db: LegatoDb, paths: Map<Long, String>) =
         Backups(context, db, FolderStore(context), ProgressStore(context), BookmarkStore(context), file) { paths }
@@ -54,7 +55,7 @@ class BackupTest {
         after.daily() // must not overwrite the backup from before
         assertTrue(file.readText().contains("Road trip"))
 
-        after.restore(backupFromJson(file.readText()))
+        assertEquals(0, after.restore(backupFromJson(file.readText())))
         val restored = db2.playlists().playlists().first().single()
         assertEquals("Road trip", restored.name)
         assertEquals(listOf(12L, 11L, 12L), db2.playlists().trackIds(restored.id).first())
@@ -66,6 +67,25 @@ class BackupTest {
         assertEquals(setOf("Books/"), FolderStore(context).folders(FolderKind.Audiobooks).first())
         assertEquals(Sort.Recent, FolderStore(context).sort.first())
         assertFalse(after.fromBefore)
+        db1.close(); db2.close()
+    }
+
+    @Test
+    fun songs_not_on_the_phone_are_counted_and_the_backup_before_is_kept() = runTest {
+        val db1 = db()
+        val playlist = db1.playlists().insert(com.phuuun.legato.library.db.Playlist(name = "Road trip", createdAt = 5))
+        db1.playlists().edit(playlist) { it += listOf(1L, 2L) }
+        val full = backups(db1, mapOf(1L to "/m/a.mp3", 2L to "/m/b.mp3"))
+        full.backUp()
+        val fullText = file.readText()
+
+        // A new phone with only one of the two songs copied over yet.
+        val db2 = db()
+        val partial = backups(db2, mapOf(11L to "/m/a.mp3"))
+        assertEquals(1, partial.restore(backupFromJson(fullText)))
+        partial.backUp()
+        assertFalse(file.readText().contains("/m/b.mp3"))
+        assertEquals(fullText, previous.readText())
         db1.close(); db2.close()
     }
 

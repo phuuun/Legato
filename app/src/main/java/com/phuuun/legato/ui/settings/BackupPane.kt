@@ -40,7 +40,7 @@ fun BackupPane(backups: Backups, backUp: (done: () -> Unit) -> Unit, restore: (U
     val pick = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri -> if (uri != null) confirming = uri }
     val muted = MaterialTheme.colorScheme.onSurfaceVariant
     key(refresh) { Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Text("Playlists, bookmarks, listening progress, play counts, hidden files and folders go to Download/${backups.file.name}, once a day. It stays when Legato is uninstalled.", style = MaterialTheme.typography.bodyMedium, color = muted)
+        Text("Playlists, bookmarks, listening progress, play counts, hidden files and folders go to Download/${backups.file.name}, once a day. It stays when Legato is uninstalled, and the one before it is kept as \"${backups.previous.name}\".", style = MaterialTheme.typography.bodyMedium, color = muted)
         Text(
             when {
                 backups.fromBefore -> "Daily backups are paused: there's a backup from before this install. Restore it, or back up now to replace it."

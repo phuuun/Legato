@@ -76,6 +76,12 @@ class Backups(
 ) {
     private val prefs = context.getSharedPreferences("backup", Context.MODE_PRIVATE)
 
+    /**
+     * The backup before the current one. A restore made before every song is on the phone drops the missing ones,
+     * and the next daily backup would otherwise drop them from the only copy.
+     */
+    val previous: File get() = File(file.parentFile, "${file.nameWithoutExtension} (previous).json")
+
     /** When this install last wrote or restored the backup; 0 means never. */
     val last: Long get() = prefs.getLong("last", 0)
 
@@ -92,6 +98,7 @@ class Backups(
         // Written beside the old one, then swapped in, so a crash mid-write never leaves half a backup.
         val temp = File(file.parentFile, ".${file.name}.tmp")
         temp.writeText(text)
+        if (file.exists()) file.renameTo(previous)
         if (!temp.renameTo(file)) { temp.delete(); error("Couldn't save the backup") }
         prefs.edit { putLong("last", System.currentTimeMillis()) }
     }
@@ -115,8 +122,11 @@ class Backups(
         )
     }
 
-    /** Replaces playlists, bookmarks, folders and hidden files with the backup's; adds its listening spots and play counts. */
-    suspend fun restore(data: BackupData) = withContext(Dispatchers.IO) {
+    /**
+     * Replaces playlists, bookmarks, folders and hidden files with the backup's; adds its listening spots and play counts.
+     * Returns how many of its playlists' songs aren't on this phone (yet): those are left out.
+     */
+    suspend fun restore(data: BackupData): Int = withContext(Dispatchers.IO) {
         val ids = audioPaths().entries.associate { (id, path) -> path to id }
         val dao = db.playlists()
         dao.playlists().first().forEach { dao.delete(it.id) }
@@ -133,6 +143,7 @@ class Backups(
         folders.setFolders(FolderKind.Audiobooks, data.audiobookFolders)
         Sort.entries.firstOrNull { it.name == data.sort }?.let(folders::setSort)
         prefs.edit { putLong("last", System.currentTimeMillis()) }
+        data.playlists.flatMap { it.paths }.distinct().count { it !in ids }
     }
 }
 
