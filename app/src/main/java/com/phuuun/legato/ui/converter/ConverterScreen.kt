@@ -399,7 +399,7 @@ private fun PlaylistFoot(choices: PlaylistChoices, picks: SnapshotStateList<Pick
     }
 }
 
-/** Shown only when the song is already on the phone: ticked, the download replaces that file. */
+/** Shown only when the song is already on the phone: ticked, the download takes its place and the old file is hidden (see DownloadService). */
 @Composable
 private fun ReplaceBox(artist: String, title: String, library: List<Track>, replace: Boolean, onReplace: (Boolean) -> Unit) {
     val old = remember(artist, title, library) { findDuplicate(artist, title, library) } ?: return

@@ -77,10 +77,12 @@ class DownloadService : Service() {
         val dir = File(Environment.getExternalStorageDirectory(), job.folder)
         var part: File? = null
         try {
-            // The file being replaced doesn't block its own name: the new one is renamed over it.
             val old = job.replaces
-            val name = uniqueName(job.fileName, dir.list()?.filterNot { File(dir, it).path == old?.path }?.toSet().orEmpty())
+            val name = uniqueName(job.fileName, dir.list()?.toSet().orEmpty())
             part = File(dir, PART + name)
+            // Without all files access, Android only lets Legato make files in its standard folders (Music, Download, …).
+            val made = withContext(Dispatchers.IO) { runCatching { dir.mkdirs(); part.createNewFile() }.getOrDefault(false) }
+            if (!made) error("Android won't let Legato save into ${job.folder}. Pick a folder inside Music or Download.")
             queue.set(job.id, JobState.Downloading(0))
             updateNotification("Downloading ${job.label}", 0)
             val stream = YouTube.stream(job.videoUrl)
@@ -107,11 +109,11 @@ class DownloadService : Service() {
             val target = File(dir, name)
             if (!part.renameTo(target)) error("Couldn't save the file")
             val uri = scan(target.path)
-            // A replaced song hands its playlist spots and plays to the new file before it goes; if the scanner
-            // never answers, the old file stays, so nothing is lost either way.
+            // A replaced song hands its playlist spots and plays to the new file and is hidden in Legato, never deleted:
+            // Legato doesn't touch files it didn't make. Settings → Hidden brings it back.
             if (old != null && uri != null) {
                 app.playlists.moveTrack(old.id, ContentUris.parseId(uri))
-                if (old.path != target.path) withContext(Dispatchers.IO) { File(old.path).delete() }
+                app.folders.hide(listOf(old.path))
             }
             queue.set(job.id, JobState.Done)
         } catch (e: Exception) {

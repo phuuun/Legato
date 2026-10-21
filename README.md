@@ -7,7 +7,7 @@ A player for the music and audiobooks already on your Android phone, in black an
 **Music**
 - Songs, albums, artists and playlists from the folders you choose, sorted by title, artist or date added.
 - Smart playlists: most played, recently played, recently added.
-- Edit tags and covers, written into the files themselves; fix untagged artists in bulk.
+- Edit titles, artists, narrators and covers, and fix untagged artists in bulk. Edits are kept in Legato: your files are never changed.
 - ReplayGain, a five-band equalizer, and a full player tinted by the cover.
 
 **Audiobooks**
@@ -18,13 +18,13 @@ A player for the music and audiobooks already on your Android phone, in black an
 **Converter**
 - Paste or share a video link and save its audio as an M4A, tagged, with a cover and its chapters, straight into your music or audiobook folder. Playlists work too.
 
-Everything stays on the phone: no account, no ads, no tracking. Playlists, bookmarks and progress back up once a day to `Download/Legato backup.json`.
+Everything stays on the phone: no account, no ads, no tracking. Playlists, bookmarks, edits and progress back up once a day to `Download/Legato backup.json`.
 
 ## Install
 
 1. Download the latest `Legato-x.y.z.apk` from [Releases](../../releases).
 2. Open it on your phone and allow installing from your browser or file manager.
-3. Give Legato "All files access" when it asks. It needs it to write tags into your files and to save converted audio into your folders.
+3. Allow Legato to see your music and audio when it asks. That's read-only: Legato never changes your files. Converted audio can be saved into folders inside Music or Download.
 
 Needs Android 11 or newer on a 64-bit ARM phone (nearly every phone since 2017). To update, install the newer APK over the old one; nothing is lost.
 

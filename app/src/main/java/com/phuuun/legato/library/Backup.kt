@@ -85,7 +85,7 @@ class Backups(
     private val bookmarks: BookmarkStore,
     private val edits: EditStore,
     // Legato Debug keeps its own file, so it never writes over the real app's backup.
-    val file: File = File(
+    private val home: File = File(
         Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS),
         if (context.packageName.endsWith(".debug")) "Legato Debug backup.json" else "Legato backup.json",
     ),
@@ -93,6 +93,12 @@ class Backups(
     private val audioPaths: suspend () -> Map<Long, String> = { mediaStorePaths(context) },
 ) {
     private val prefs = context.getSharedPreferences("backup", Context.MODE_PRIVATE)
+
+    /**
+     * The backup file. After a reinstall Android hides the old install's backup from Legato and won't let it write over
+     * it, so backups go to the next free name ("Legato backup 2.json"); Restore from another file still reads the old one.
+     */
+    val file: File get() = prefs.getString("name", null)?.let { File(home.parentFile, it) } ?: home
 
     /**
      * The backup before the current one. A restore made before every song is on the phone drops the missing ones,
@@ -114,11 +120,13 @@ class Backups(
     suspend fun backUp() = withContext(Dispatchers.IO) {
         val text = collect().toJson()
         // Written beside the old one, then swapped in, so a crash mid-write never leaves half a backup.
-        val temp = File(file.parentFile, ".${file.name}.tmp")
+        val temp = File(file.parentFile, ".${file.name}.${System.currentTimeMillis()}.tmp")
         temp.writeText(text)
         if (file.exists()) file.renameTo(previous)
-        if (!temp.renameTo(file)) { temp.delete(); error("Couldn't save the backup") }
-        prefs.edit { putLong("last", System.currentTimeMillis()) }
+        val saved = (sequenceOf(file) + (2..20).asSequence().map { File(home.parentFile, "${home.nameWithoutExtension} $it.json") })
+            .firstOrNull { !it.exists() && temp.renameTo(it) }
+        if (saved == null) { temp.delete(); error("Couldn't save the backup") }
+        prefs.edit { putLong("last", System.currentTimeMillis()); putString("name", saved.name) }
     }
 
     suspend fun daily() {
