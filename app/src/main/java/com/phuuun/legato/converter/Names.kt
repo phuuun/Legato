@@ -2,8 +2,11 @@ package com.phuuun.legato.converter
 
 private val illegal = Regex("""[/\\:*?"<>|]""")
 
-/** A file name Android accepts: no path characters, never empty, at most 120 characters before ".m4a". */
-private fun safe(base: String): String = base.replace(illegal, "_").trim().ifEmpty { "Untitled" }.take(120).trim()
+/**
+ * A file name Android accepts: no path characters, never empty, at most 120 characters before ".m4a". No leading dot
+ * either: that makes a hidden file, which MediaStore never lists ("...Ready For It?").
+ */
+private fun safe(base: String): String = base.replace(illegal, "_").trimStart { it == '.' || it.isWhitespace() }.trimEnd().ifEmpty { "Untitled" }.take(120).trim()
 
 fun musicFileName(artist: String, title: String) = safe(if (artist.isBlank()) title else "${artist.trim()} - ${title.trim()}") + ".m4a"
 

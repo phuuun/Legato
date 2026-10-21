@@ -20,6 +20,12 @@ class NamesTest {
     fun long_names_are_trimmed_keeping_the_extension() = assertEquals(120 + ".m4a".length, bookFileName("x".repeat(300)).length)
 
     @Test
+    fun a_leading_dot_would_hide_the_file() {
+        assertEquals("Ready For It_.m4a", bookFileName("...Ready For It?"))
+        assertEquals("Untitled.m4a", bookFileName(". . ."))
+    }
+
+    @Test
     fun empty_title_still_gets_a_name() = assertEquals("Untitled.m4a", bookFileName("   "))
 
     @Test
