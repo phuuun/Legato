@@ -53,6 +53,9 @@ android {
     }
 }
 
+// Each database version's schema goes in app/schemas (committed), so a later version can migrate playlists instead of losing them.
+ksp { arg("room.schemaLocation", "$projectDir/schemas") }
+
 dependencies {
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.activity.compose)

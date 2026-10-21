@@ -71,7 +71,6 @@ abstract class PlaylistDao {
 
 @Dao
 abstract class StatsDao {
-    // Two statements instead of an upsert: SQLite on API 24-29 predates ON CONFLICT DO UPDATE.
     @Query("INSERT OR IGNORE INTO play_stats VALUES (:id, 0, :now)")
     protected abstract suspend fun ensure(id: Long, now: Long)
 
@@ -103,7 +102,7 @@ abstract class StatsDao {
     abstract fun byRecent(): Flow<List<PlayStat>>
 }
 
-@Database(entities = [Playlist::class, PlaylistTrack::class, PlayStat::class], version = 1, exportSchema = false)
+@Database(entities = [Playlist::class, PlaylistTrack::class, PlayStat::class], version = 1)
 abstract class LegatoDb : RoomDatabase() {
     abstract fun playlists(): PlaylistDao
     abstract fun stats(): StatsDao
