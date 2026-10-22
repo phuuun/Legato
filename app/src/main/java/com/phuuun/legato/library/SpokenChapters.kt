@@ -2,9 +2,8 @@ package com.phuuun.legato.library
 
 import kotlin.math.log10
 
-// Chapterfy: chapters from what the narrator says. Only the first seconds after each long pause are listened to, with a
-// grammar of heading words, so a 10-hour book takes minutes and hardly gets misheard (tried on a real book: chapters 2–41
-// in order, two missed).
+// Chapterfy: chapters from what the narrator says. Only the first seconds after each long pause are listened to (by
+// Whisper, see Whisper.kt), so a 10-hour book takes minutes, and only what starts like a heading counts.
 
 private val units = listOf(
     "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten", "eleven", "twelve", "thirteen",
@@ -12,9 +11,6 @@ private val units = listOf(
 )
 private val tens = listOf("twenty", "thirty", "forty", "fifty", "sixty", "seventy", "eighty", "ninety")
 private val headings = listOf("chapter", "prologue", "epilogue", "part")
-
-/** Every word the recognizer may hear; anything else comes back as "[unk]". */
-val ChapterWords: List<String> = headings + units + tens + listOf("hundred", "and", "[unk]")
 
 private fun isNumberWord(w: String) = w in units || w in tens || w == "hundred" || w == "and"
 
@@ -35,10 +31,30 @@ fun spokenNumber(words: List<String>): Int? {
     return n.takeIf { any && it > 0 }
 }
 
-/** What was heard after a pause as a heading: "chapter twenty one [unk]" → "Chapter 21", "prologue" → "Prologue"; else null. */
+private fun words(text: String) = text.lowercase().replace('-', ' ').split(Regex("[^a-z0-9]+")).filter { it.isNotEmpty() }
+
+/** Whether what was heard starts with a heading word: worth listening to whole (see Whisper.kt). */
+fun startsLikeHeading(text: String): Boolean = words(text).firstOrNull() in headings
+
+// A Roman numeral right after the heading word that ends the sentence ("Chapter II."), so "Part I think…" isn't Part 1.
+private val roman = Regex("^\\W*\\w+\\W+([ivxlc]+)\\s*(?:[.,:;!?]|$)", RegexOption.IGNORE_CASE)
+
+/** "ii" → 2, "xiv" → 14; null when it isn't one. */
+fun romanNumber(s: String): Int? {
+    val values = s.lowercase().map { mapOf('i' to 1, 'v' to 5, 'x' to 10, 'l' to 50, 'c' to 100)[it] ?: return null }
+    return values.indices.sumOf { i -> if (i + 1 < values.size && values[i] < values[i + 1]) -values[i] else values[i] }.takeIf { it > 0 }
+}
+
+/**
+ * What was heard after a pause as a heading: "Chapter 21.", "Chapter Twenty-One.", "Chapter XXI." and "chapter twenty
+ * one" → "Chapter 21", "Prologue." → "Prologue"; else null.
+ */
 fun spokenChapter(text: String): String? {
-    val words = text.trim().split(' ').filter { it.isNotEmpty() }
-    val number = spokenNumber(words.drop(1).takeWhile(::isNumberWord))
+    val words = words(text)
+    val rest = words.drop(1)
+    val number = rest.firstOrNull()?.toIntOrNull()?.takeIf { it > 0 }
+        ?: roman.find(text.trim())?.groupValues?.get(1)?.let(::romanNumber)
+        ?: spokenNumber(rest.takeWhile(::isNumberWord))
     return when (words.firstOrNull()) {
         "chapter" -> if (number != null) "Chapter $number" else "Chapter"
         "prologue" -> "Prologue"

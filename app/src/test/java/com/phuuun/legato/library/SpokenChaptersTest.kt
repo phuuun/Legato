@@ -30,6 +30,45 @@ class SpokenChaptersTest {
         assertNull(spokenChapter(""))
     }
 
+    // How Whisper writes them.
+    @Test
+    fun headings_as_whisper_writes_them() {
+        assertEquals("Chapter 23", spokenChapter(" Chapter 23."))
+        assertEquals("Chapter 23", spokenChapter(" Chapter Twenty-Three."))
+        assertEquals("Chapter 1", spokenChapter("CHAPTER ONE"))
+        assertEquals("Chapter 105", spokenChapter("Chapter one hundred and five. Avery"))
+        assertEquals("Prologue", spokenChapter("Prologue."))
+        assertEquals("Part 2", spokenChapter("Part 2:"))
+        assertEquals("Chapter", spokenChapter("Chapter."))
+        assertNull(spokenChapter("Chapters of my life were..."))
+        assertNull(spokenChapter(" I said, chapter two."))
+        // tiny.en on The Inheritance Games
+        assertEquals("Chapter 2", spokenChapter(" Chapter II. Rough day Libby."))
+        assertEquals("Chapter 14", spokenChapter("Chapter XIV"))
+        assertEquals("Part 4", spokenChapter("Part IV: The Will"))
+        assertNull(spokenChapter("Part I think it was"))
+    }
+
+    @Test
+    fun quick_listen_lets_only_headings_through() {
+        assertTrue(startsLikeHeading(" chapter two chapter two"))
+        assertTrue(startsLikeHeading("Prologue."))
+        assertTrue(startsLikeHeading("Part"))
+        assertFalse(startsLikeHeading(" Rough day, Libby asked."))
+        assertFalse(startsLikeHeading(""))
+        assertEquals(49, romanNumber("XLIX"))
+        assertNull(romanNumber("mix"))
+    }
+
+    @Test
+    fun audio_is_averaged_down_to_16k() {
+        val pcm = ShortArray(441) { if (it % 2 == 0) 16384 else -16384 } // 10 ms at 44.1 kHz, loudest possible hiss
+        val out = to16k(pcm, pcm.size, 44_100)
+        assertEquals(160, out.size)
+        assertTrue(out.all { kotlin.math.abs(it) < 0.25f }) // averaged away, not aliased into the speech band at full volume
+        assertEquals(0.5f, to16k(ShortArray(48) { 16384 }, 48, 48_000)[0], 1e-6f)
+    }
+
     @Test
     fun list_adds_the_top_and_drops_repeats() {
         val heard = listOf(Chapter("Chapter 3", 684_000), Chapter("Chapter 2", 445_000), Chapter("Chapter 3", 690_000))

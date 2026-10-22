@@ -13,9 +13,3 @@
 
 # TagLib is native: its JNI code calls back into these classes by name.
 -keep class com.kyant.taglib.** { *; }
-
-# Vosk (Chapterfy) reaches its native library through JNA, which binds methods and structures by reflection.
--keep class org.vosk.** { *; }
--keep class com.sun.jna.** { *; }
--keepclassmembers class * extends com.sun.jna.** { public *; }
--dontwarn java.awt.**

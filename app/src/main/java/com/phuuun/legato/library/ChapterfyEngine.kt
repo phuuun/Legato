@@ -19,12 +19,6 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.withContext
-import org.json.JSONArray
-import org.json.JSONObject
-import org.vosk.LibVosk
-import org.vosk.LogLevel
-import org.vosk.Model
-import org.vosk.Recognizer
 import java.io.File
 import java.io.FileInputStream
 import java.nio.ByteBuffer
@@ -47,7 +41,6 @@ private const val LISTEN_MS = 4_000
  * at a seam is heard by one of them; [chapterList] drops the repeat.
  */
 suspend fun listenBook(path: String, modelPath: String, inProcess: Boolean, progress: (doneMs: Long, totalMs: Long, found: Int) -> Unit): List<Chapter> = withContext(Dispatchers.Default) {
-    LibVosk.setLogLevel(LogLevel.WARNINGS)
     val totalMs = MediaExtractor().run {
         try { setDataSource(path); (0 until trackCount).map { getTrackFormat(it) }.firstOrNull { it.isAudio }?.getLong(MediaFormat.KEY_DURATION)?.div(1000) ?: error("No audio") }
         finally { release() }
@@ -61,13 +54,13 @@ suspend fun listenBook(path: String, modelPath: String, inProcess: Boolean, prog
     val started = System.nanoTime()
     progress(0, totalMs, 0)
     // The model closes only once every stretch has stopped, Stop included: they share it.
-    val heard = Model(modelPath).use { vosk ->
+    val heard = WhisperModel(modelPath).use { whisper ->
         coroutineScope {
             (0 until parts).map { i ->
                 val from = totalMs * i / parts
                 val to = if (i == parts - 1) totalMs else totalMs * (i + 1) / parts + 10_000
                 async {
-                    listenPart(path, table, inProcess, vosk, from, to, recognizing) { ms, heardOne ->
+                    listenPart(path, table, inProcess, whisper, from, to, recognizing) { ms, heardOne ->
                         if (!isActive) return@listenPart
                         done.set(i, ms - from)
                         if (heardOne) found.incrementAndGet()
@@ -96,7 +89,7 @@ suspend fun listenBook(path: String, modelPath: String, inProcess: Boolean, prog
  * turns damaged audio into noise where Android's decoder smooths it over, and native code fed that can crash; that's why
  * Chapterfy has its own process, and a book it crashed on is listened to again with [inProcess] false.
  */
-private suspend fun listenPart(path: String, table: SampleTable?, inProcess: Boolean, vosk: Model, fromMs: Long, toMs: Long, recognizing: AtomicLong, progress: (Long, Boolean) -> Unit): List<Chapter> = coroutineScope {
+private suspend fun listenPart(path: String, table: SampleTable?, inProcess: Boolean, whisper: WhisperModel, fromMs: Long, toMs: Long, recognizing: AtomicLong, progress: (Long, Boolean) -> Unit): List<Chapter> = coroutineScope {
     val extractor = MediaExtractor()
     var codec: MediaCodec? = null
     var channel: FileChannel? = null
@@ -116,7 +109,7 @@ private suspend fun listenPart(path: String, table: SampleTable?, inProcess: Boo
             val open = { inProcessAacDecoder(format.getInteger(MediaFormat.KEY_SAMPLE_RATE), format.getInteger(MediaFormat.KEY_CHANNEL_COUNT), config) }
             val d = open()
             if (d != null) {
-                val e = Ear(vosk, format.getInteger(MediaFormat.KEY_SAMPLE_RATE), format.getInteger(MediaFormat.KEY_CHANNEL_COUNT), recognizing).also { ear = it }
+                val e = Ear(whisper, format.getInteger(MediaFormat.KEY_SAMPLE_RATE), format.getInteger(MediaFormat.KEY_CHANNEL_COUNT), recognizing).also { ear = it }
                 val reader = SampleReader(table, FileInputStream(path).channel.also { channel = it })
                 val heard = wholeInProcess(d, { open()!! }, channels, reader, table, e, fromMs, toMs, progress) { decoded = it }
                 if (heard != null) return@coroutineScope heard
@@ -127,7 +120,7 @@ private suspend fun listenPart(path: String, table: SampleTable?, inProcess: Boo
         val c = MediaCodec.createDecoderByType(format.getString(MediaFormat.KEY_MIME)!!).also { codec = it }
         c.configure(format, null, null, 0)
         c.start()
-        val e = Ear(vosk, format.getInteger(MediaFormat.KEY_SAMPLE_RATE), format.getInteger(MediaFormat.KEY_CHANNEL_COUNT), recognizing).also { ear = it }
+        val e = Ear(whisper, format.getInteger(MediaFormat.KEY_SAMPLE_RATE), format.getInteger(MediaFormat.KEY_CHANNEL_COUNT), recognizing).also { ear = it }
 
         // Own reader: which sample to feed next, and what's decoded whole ([full], else scanning).
         val reader = table?.let { SampleReader(it, FileInputStream(path).channel.also { ch -> channel = ch }) }
@@ -367,9 +360,9 @@ private class SampleReader(private val table: SampleTable, private val channel: 
  * Decoded audio in, headings out: loudness every 50 ms, and after each pause of 1.5 s or more (see [PauseFinder]) the next
  * [LISTEN_MS] go to the recognizer. [reset] after a jump.
  */
-private class Ear(private val vosk: Model, private var rate: Int, private var channels: Int, private val recognizing: AtomicLong) {
+private class Ear(whisper: WhisperModel, private var rate: Int, private var channels: Int, private val recognizing: AtomicLong) {
     val heard = mutableListOf<Chapter>()
-    private var recognizer: Recognizer? = null
+    private val listener = whisper.listener()
     private var pauses = PauseFinder()
     private var frame = ShortArray(rate / 20)
     private var inFrame = 0
@@ -388,7 +381,6 @@ private class Ear(private val vosk: Model, private var rate: Int, private var ch
 
     fun format(rate: Int, channels: Int) {
         // HE-AAC decodes at twice the rate the container states.
-        if (rate != this.rate) { recognizer?.close(); recognizer = null }
         this.rate = rate
         this.channels = channels
         reset()
@@ -424,7 +416,6 @@ private class Ear(private val vosk: Model, private var rate: Int, private var ch
 
     /** Takes one decoded buffer starting at [ptsUs]; true when it completed a heading. */
     fun hear(pcm: ShortArray, n: Int, ptsUs: Long): Boolean {
-        val rec = recognizer ?: Recognizer(vosk, rate.toFloat(), JSONArray(ChapterWords).toString()).also { recognizer = it }
         // Time from each buffer's own timestamp, not by counting: skipped or undecodable samples would make it drift.
         samples = ptsUs * rate / 1_000_000
         var heardOne = false
@@ -439,9 +430,7 @@ private class Ear(private val vosk: Model, private var rate: Int, private var ch
                 w[inWindow++] = mono
                 if (inWindow == w.size) {
                     val t = System.nanoTime()
-                    rec.acceptWaveForm(w, w.size)
-                    val title = spokenChapter(JSONObject(rec.finalResult).optString("text"))
-                    rec.reset()
+                    val title = spokenChapter(listener.hear(to16k(w, w.size, rate)))
                     recognizing.addAndGet(System.nanoTime() - t)
                     if (title != null) { heard += Chapter(title, (windowStartMs - 300).coerceAtLeast(0)); heardOne = true }
                     window = null
@@ -465,7 +454,7 @@ private class Ear(private val vosk: Model, private var rate: Int, private var ch
         return heardOne
     }
 
-    fun close() { recognizer?.close() }
+    fun close() = listener.close()
 }
 
 private val MediaFormat.isAudio get() = getString(MediaFormat.KEY_MIME)?.startsWith("audio/") == true

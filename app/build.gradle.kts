@@ -16,6 +16,8 @@ android {
         versionName = "1.0.3"
         // TagLib is native; this phone is 64-bit ARM, and every other ABI is dead weight in the APK.
         ndk { abiFilters += "arm64-v8a" }
+        // Optimized in debug builds too: unoptimized, Whisper is several times slower and trying Chapterfy says nothing.
+        externalNativeBuild { cmake { arguments += "-DCMAKE_BUILD_TYPE=Release" } }
     }
 
     // The release key lives outside the repo; its path and password come from ~/.gradle/gradle.properties.
@@ -50,6 +52,14 @@ android {
         targetCompatibility = JavaVersion.VERSION_11
     }
     buildFeatures { compose = true }
+    // whisper.cpp, Chapterfy's speech recognizer: a git submodule in src/main/cpp, built with the NDK.
+    ndkVersion = "30.0.16248370"
+    externalNativeBuild {
+        cmake {
+            path = file("src/main/cpp/CMakeLists.txt")
+            version = "4.1.2"
+        }
+    }
     testOptions { unitTests { isIncludeAndroidResources = true } }
     dependenciesInfo {
         includeInApk = false
@@ -77,7 +87,6 @@ dependencies {
     implementation(libs.androidx.room.ktx)
     ksp(libs.androidx.room.compiler)
     implementation(libs.taglib)
-    implementation(libs.vosk)
     implementation(libs.ffmpeg.decoder)
     implementation(libs.newpipe.extractor)
     implementation(libs.coil.compose)

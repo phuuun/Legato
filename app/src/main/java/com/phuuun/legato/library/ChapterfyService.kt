@@ -28,8 +28,8 @@ private const val WORKING = 3
 private const val FINISHED = 4
 
 /**
- * Chapterfy's own process (":chapterfy" in the manifest). FFmpeg and Vosk are native code fed whatever is in the file,
- * and damaged audio has crashed both; here a crash ends only this process, and the app, watching it (see Chapterfy),
+ * Chapterfy's own process (":chapterfy" in the manifest). FFmpeg and Whisper are native code fed whatever is in the file,
+ * and damaged audio has crashed FFmpeg; here a crash ends only this process, and the app, watching it (see Chapterfy),
  * listens again without FFmpeg. It runs in the foreground with its progress in a notification, so the phone can be put
  * away meanwhile, and leaves what it found in [resultFile] for an app that was closed in the meantime.
  */
