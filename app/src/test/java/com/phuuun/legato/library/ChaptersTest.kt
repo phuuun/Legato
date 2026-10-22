@@ -82,6 +82,21 @@ class ChaptersTest {
         assertEquals(null, mp4AudioSamples(File(javaClass.classLoader!!.getResource("chapters/book.mp3")!!.toURI()).path))
     }
 
+    // fragmented.m4a: book.m4b's audio remuxed by ffmpeg into 1 s fragments (empty moov, moof + mdat), like YouTube's M4A.
+    @Test
+    fun fragmented_samples_match_the_plain_file() {
+        val plainPath = File(javaClass.classLoader!!.getResource("chapters/book.m4b")!!.toURI()).path
+        val fragPath = File(javaClass.classLoader!!.getResource("chapters/fragmented.m4a")!!.toURI()).path
+        val plain = mp4AudioSamples(plainPath)!!
+        val frag = mp4AudioSamples(fragPath)!!
+        assertEquals(plain.sizes.toList(), frag.sizes.toList())
+        assertEquals(plain.sizes.indices.map { plain.startUs(it) }, frag.sizes.indices.map { frag.startUs(it) })
+        fun bytes(path: String, t: SampleTable) = RandomAccessFile(path, "r").use { f ->
+            t.sizes.indices.map { i -> ByteArray(t.sizes[i]).also { f.seek(t.offsets[i]); f.readFully(it) }.toList() }
+        }
+        assertEquals(bytes(plainPath, plain), bytes(fragPath, frag))
+    }
+
     @Test
     fun long_files_without_chapters_get_parts() {
         assertEquals(emptyList<Chapter>(), autoParts(40 * 60_000L))

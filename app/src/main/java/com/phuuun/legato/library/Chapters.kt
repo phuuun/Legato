@@ -179,8 +179,8 @@ class SampleTable(val offsets: LongArray, val sizes: IntArray, val starts: LongA
 }
 
 /**
- * The audio track's samples of a plain MP4/M4A, for reading them without MediaExtractor (see Chapterfy). Null for a
- * fragmented file, whose samples are listed in its fragments instead, or anything that isn't an MP4.
+ * The audio track's samples of an MP4/M4A, for reading them without MediaExtractor (see Chapterfy): from moov's tables, or
+ * from the fragments of a fragmented file (YouTube's). Null for anything that isn't an MP4.
  */
 fun mp4AudioSamples(file: String): SampleTable? = runCatching {
     RandomAccessFile(File(file), "r").use { f ->
@@ -189,9 +189,82 @@ fun mp4AudioSamples(file: String): SampleTable? = runCatching {
         val trak = boxes(b, root.body, root.end).filter { it.type == "trak" }.firstOrNull { t ->
             path(b, t, "mdia", "hdlr")?.let { h -> String(ByteArray(4) { b.get(h.body + 8 + it) }, Charsets.ISO_8859_1) } == "soun"
         } ?: return@use null
-        sampleTable(b, trak)?.takeIf { it.sizes.isNotEmpty() }
+        sampleTable(b, trak)?.takeIf { it.sizes.isNotEmpty() } ?: fragmentSamples(f, b, root, trak)?.takeIf { it.sizes.isNotEmpty() }
     }
 }.getOrNull()
+
+/**
+ * The samples of [trak] listed in a fragmented file's moof boxes: per traf, tfhd (track and defaults), tfdt (start time)
+ * and trun (each sample's duration and size, with an offset from the moof). Defaults missing from tfhd come from moov's trex.
+ */
+private fun fragmentSamples(f: RandomAccessFile, b: ByteBuffer, moov: Box, trak: Box): SampleTable? {
+    val tkhd = path(b, trak, "tkhd") ?: return null
+    val id = b.getInt(tkhd.body + if (b.get(tkhd.body).toInt() == 1) 20 else 12)
+    val mdhd = path(b, trak, "mdia", "mdhd") ?: return null
+    val timescale = b.getInt(mdhd.body + if (b.get(mdhd.body).toInt() == 1) 20 else 12).toLong().takeIf { it > 0 } ?: return null
+    val trex = path(b, moov, "mvex")?.let { m -> boxes(b, m.body, m.end).firstOrNull { it.type == "trex" && b.getInt(it.body + 4) == id } }
+    val trexDuration = trex?.let { b.getInt(it.body + 12) } ?: 0
+    val trexSize = trex?.let { b.getInt(it.body + 16) } ?: 0
+
+    val offsets = LongArrayList()
+    val sizes = IntArrayList()
+    val starts = LongArrayList()
+    var t = 0L
+    var at = 0L
+    while (at + 8 <= f.length()) {
+        f.seek(at)
+        var size = f.readInt().toLong() and 0xffffffffL
+        val type = ByteArray(4).also { f.readFully(it) }.toString(Charsets.ISO_8859_1)
+        if (size == 1L) size = f.readLong() else if (size == 0L) size = f.length() - at
+        if (size < 8) break
+        if (type == "moof") {
+            val m = ByteBuffer.wrap(ByteArray(size.toInt()).also { f.seek(at); f.readFully(it) })
+            val moof = boxes(m, 0, m.capacity()).find("moof") ?: break
+            for (traf in boxes(m, moof.body, moof.end).filter { it.type == "traf" }) {
+                val inside = boxes(m, traf.body, traf.end)
+                val tfhd = inside.find("tfhd") ?: continue
+                if (m.getInt(tfhd.body + 4) != id) continue
+                val hf = m.getInt(tfhd.body) and 0xffffff
+                var h = tfhd.body + 8
+                val base = if (hf and 0x1 != 0) m.getLong(h).also { h += 8 } else at // else the moof's own start
+                if (hf and 0x2 != 0) h += 4
+                val defDuration = if (hf and 0x8 != 0) m.getInt(h).also { h += 4 } else trexDuration
+                val defSize = if (hf and 0x10 != 0) m.getInt(h) else trexSize
+                inside.find("tfdt")?.let { d -> t = if (m.get(d.body).toInt() == 1) m.getLong(d.body + 4) else m.getInt(d.body + 4).toLong() and 0xffffffffL }
+                for (trun in inside.filter { it.type == "trun" }) {
+                    val rf = m.getInt(trun.body) and 0xffffff
+                    val count = m.getInt(trun.body + 4)
+                    var r = trun.body + 8
+                    var o = base + if (rf and 0x1 != 0) m.getInt(r).also { r += 4 } else 0
+                    if (rf and 0x4 != 0) r += 4
+                    repeat(count) {
+                        val duration = if (rf and 0x100 != 0) m.getInt(r).also { r += 4 } else defDuration
+                        val s = if (rf and 0x200 != 0) m.getInt(r).also { r += 4 } else defSize
+                        if (rf and 0x400 != 0) r += 4
+                        if (rf and 0x800 != 0) r += 4
+                        offsets += o; sizes += s; starts += t
+                        o += s; t += duration.toLong() and 0xffffffffL
+                    }
+                }
+            }
+        }
+        at += size
+    }
+    return SampleTable(offsets.toArray(), sizes.toArray(), starts.toArray(), timescale)
+}
+
+// Growable primitive arrays: a 10 h book has ~1.7M samples, too many to box into a List<Long>.
+private class LongArrayList {
+    private var a = LongArray(1024); private var n = 0
+    operator fun plusAssign(v: Long) { if (n == a.size) a = a.copyOf(n * 2); a[n++] = v }
+    fun toArray() = a.copyOf(n)
+}
+
+private class IntArrayList {
+    private var a = IntArray(1024); private var n = 0
+    operator fun plusAssign(v: Int) { if (n == a.size) a = a.copyOf(n * 2); a[n++] = v }
+    fun toArray() = a.copyOf(n)
+}
 
 private fun sampleTable(b: ByteBuffer, trak: Box): SampleTable? {
     val mdhd = path(b, trak, "mdia", "mdhd") ?: return null
