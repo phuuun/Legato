@@ -11,10 +11,10 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.SwapVert
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
+import com.phuuun.legato.ui.components.SmallPill
+import com.phuuun.legato.ui.components.TapIcon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -50,8 +50,8 @@ fun BulkFixScreen(rows: List<FixRow>, onBack: () -> Unit, write: suspend (Track,
     Column(Modifier.screen()) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Back(onBack)
-            Text("Fix unknown artists", style = MaterialTheme.typography.headlineSmall, modifier = Modifier.weight(1f))
-            TextButton(enabled = ticked > 0 && !saving, modifier = Modifier.padding(end = 8.dp), onClick = {
+            Text("Fix unknown artists", style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
+            SmallPill("Save $ticked", enabled = ticked > 0 && !saving, modifier = Modifier.padding(end = 20.dp), onClick = {
                 saving = true
                 scope.launch {
                     val todo = items.filter { it.include }
@@ -64,7 +64,7 @@ fun BulkFixScreen(rows: List<FixRow>, onBack: () -> Unit, write: suspend (Track,
                     items.removeAll { it in todo && it !in failed }
                     saving = false
                 }
-            }) { Text("Save $ticked") }
+            })
         }
         status?.let { Text(it, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp)) }
         if (items.isEmpty()) Empty("Nothing to fix", "Every song has an artist.")
@@ -78,7 +78,7 @@ fun BulkFixScreen(rows: List<FixRow>, onBack: () -> Unit, write: suspend (Track,
                         Field("Title", r.title) { items[i] = r.copy(title = it) }
                     }
                     // Some rips are "Title - Artist"; one tap flips the guess.
-                    IconButton(onClick = { items[i] = r.copy(artist = r.title, title = r.artist) }) { Icon(Icons.Rounded.SwapVert, contentDescription = "Swap artist and title") }
+                    TapIcon(onClick = { items[i] = r.copy(artist = r.title, title = r.artist) }) { Icon(Icons.Rounded.SwapVert, contentDescription = "Swap artist and title") }
                 }
             }
         }

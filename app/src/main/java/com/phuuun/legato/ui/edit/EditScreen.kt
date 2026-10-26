@@ -22,10 +22,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
@@ -59,6 +57,15 @@ import com.phuuun.legato.ui.components.Artwork
 import com.phuuun.legato.ui.library.Back
 import com.phuuun.legato.ui.library.Empty
 import kotlinx.coroutines.launch
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsFocusedAsState
+import com.phuuun.legato.ui.components.FieldShape
+import com.phuuun.legato.ui.components.PillButton
+import com.phuuun.legato.ui.components.SmallPill
+import com.phuuun.legato.ui.components.TapIcon
+import com.phuuun.legato.ui.components.fieldFrame
+import com.phuuun.legato.ui.theme.Bold
+import com.phuuun.legato.ui.theme.enterFrom
 
 /**
  * Edits one file's tags as Legato shows them; the file itself stays as it is (see EditStore). Music: title, artists, album. Audiobooks: book title, chapter title (books
@@ -95,23 +102,18 @@ fun EditScreen(track: Track?, kind: FolderKind, chapters: Int, onBack: () -> Uni
         Row(verticalAlignment = Alignment.CenterVertically) {
             Back(onBack)
             Text("Edit", style = MaterialTheme.typography.headlineSmall, modifier = Modifier.weight(1f))
-            TextButton(onClick = {
-                val properties = if (kind == FolderKind.Music) MusicEdit(title, artists, album).properties()
-                else BookEdit(bookTitle, title.takeIf { chapters > 1 }, author, narrator).properties()
-                onSave(properties, cover)
-            }, modifier = Modifier.padding(end = 8.dp)) { Text("Save") }
         }
         Column(Modifier.verticalScroll(rememberScrollState()).padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                val art = Modifier.size(160.dp).clip(RoundedCornerShape(10.dp))
+                val art = Modifier.size(160.dp).enterFrom(scale = 0.9f, offsetY = 8.dp).clip(RoundedCornerShape(20.dp))
                 when {
                     preview != null -> Image(preview!!, contentDescription = null, contentScale = ContentScale.Crop, modifier = art)
                     cover == CoverChange.Remove -> Box(art.background(MaterialTheme.colorScheme.surfaceVariant))
                     else -> Artwork(track.artUri, art)
                 }
-                Column {
-                    TextButton(onClick = { pick.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }) { Text("Change cover") }
-                    TextButton(onClick = { cover = CoverChange.Remove; preview = null }) { Text("Remove cover") }
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    SmallPill("Change cover", { pick.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) })
+                    SmallPill("Remove cover", { cover = CoverChange.Remove; preview = null })
                 }
             }
             if (kind == FolderKind.Music) {
@@ -119,7 +121,7 @@ fun EditScreen(track: Track?, kind: FolderKind, chapters: Int, onBack: () -> Uni
                 artists.forEachIndexed { i, a ->
                     Field(if (artists.size == 1) "Artist" else "Artist ${i + 1}", a, onRemove = if (artists.size > 1) fun() { artists.removeAt(i) } else null) { artists[i] = it }
                 }
-                TextButton(onClick = { artists.add("") }) { Icon(Icons.Rounded.Add, null); Text("Add artist", Modifier.padding(start = 8.dp)) }
+                SmallPill("Add artist", { artists.add("") }, icon = Icons.Rounded.Add)
                 Field("Album", album) { album = it }
             } else {
                 Field("Book title", bookTitle) { bookTitle = it }
@@ -127,20 +129,35 @@ fun EditScreen(track: Track?, kind: FolderKind, chapters: Int, onBack: () -> Uni
                 Field("Author", author) { author = it }
                 Field("Narrator", narrator) { narrator = it }
             }
+            PillButton("Save", {
+                val properties = if (kind == FolderKind.Music) MusicEdit(title, artists, album).properties()
+                else BookEdit(bookTitle, title.takeIf { chapters > 1 }, author, narrator).properties()
+                onSave(properties, cover)
+            }, Modifier.fillMaxWidth().padding(top = 8.dp))
             Spacer(Modifier.size(24.dp))
         }
     }
 }
 
+/** A text field in the Bold frame (see fieldFrame), with its label inside. */
 @Composable
-internal fun Field(label: String, value: String, onRemove: (() -> Unit)? = null, onChange: (String) -> Unit) =
+internal fun Field(
+    label: String?, value: String, modifier: Modifier = Modifier.fillMaxWidth(), onRemove: (() -> Unit)? = null,
+    isError: Boolean = false, singleLine: Boolean = true, onChange: (String) -> Unit,
+) {
+    val source = remember { MutableInteractionSource() }
+    val focused by source.collectIsFocusedAsState()
     TextField(
-        value = value, onValueChange = onChange, singleLine = true, label = { Text(label) },
-        trailingIcon = onRemove?.let { remove -> { IconButton(onClick = remove) { Icon(Icons.Rounded.Close, "Remove $label") } } },
+        value = value, onValueChange = onChange, singleLine = singleLine, maxLines = if (singleLine) 1 else 3, isError = isError,
+        label = label?.let { { Text(it) } },
+        trailingIcon = onRemove?.let { remove -> { TapIcon(onClick = remove) { Icon(Icons.Rounded.Close, "Remove $label") } } },
         colors = TextFieldDefaults.colors(
-            focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant, unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
-            focusedIndicatorColor = Color.Transparent, unfocusedIndicatorColor = Color.Transparent,
+            focusedContainerColor = Color.Transparent, unfocusedContainerColor = Color.Transparent, errorContainerColor = Color.Transparent,
+            focusedIndicatorColor = Color.Transparent, unfocusedIndicatorColor = Color.Transparent, errorIndicatorColor = Color.Transparent,
+            focusedLabelColor = Bold.Ink, cursorColor = Bold.Ink,
         ),
-        shape = RoundedCornerShape(12.dp),
-        modifier = Modifier.fillMaxWidth(),
+        shape = FieldShape,
+        interactionSource = source,
+        modifier = modifier.fieldFrame(focused, isError),
     )
+}

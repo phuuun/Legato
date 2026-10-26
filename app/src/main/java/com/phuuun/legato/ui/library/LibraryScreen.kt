@@ -1,8 +1,5 @@
 package com.phuuun.legato.ui.library
 
-import androidx.compose.animation.Crossfade
-import androidx.compose.animation.core.tween
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -19,8 +16,6 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextField
-import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -31,22 +26,22 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.phuuun.legato.library.Track
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.grid.itemsIndexed
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.sp
+import com.phuuun.legato.ui.components.PillSwitch
+import com.phuuun.legato.ui.theme.Bold
+import com.phuuun.legato.ui.theme.Motion
+import com.phuuun.legato.ui.theme.enterFrom
+import com.phuuun.legato.ui.theme.rememberSettled
+import com.phuuun.legato.ui.theme.rise
+import com.phuuun.legato.ui.theme.slideStep
+import com.phuuun.legato.ui.theme.tap
 
-private enum class Tab(val label: String) { Songs("SONGS"), Albums("ALBUMS"), Artists("ARTISTS"), Playlists("PLAYLISTS") }
-
-/** The one search box, above Music and Audiobooks alike. */
-@Composable
-fun SearchField(query: String, onQuery: (String) -> Unit, modifier: Modifier = Modifier) =
-    TextField(
-        value = query, onValueChange = onQuery, singleLine = true,
-        placeholder = { Text("Search") },
-        colors = TextFieldDefaults.colors(
-            focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant, unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
-            focusedIndicatorColor = androidx.compose.ui.graphics.Color.Transparent, unfocusedIndicatorColor = androidx.compose.ui.graphics.Color.Transparent,
-        ),
-        shape = androidx.compose.foundation.shape.RoundedCornerShape(12.dp),
-        modifier = modifier.fillMaxWidth().padding(start = 20.dp, top = 12.dp, bottom = 12.dp),
-    )
+private enum class Tab(val label: String) { Songs("Songs"), Albums("Albums"), Artists("Artists"), Playlists("Playlists") }
 
 @Composable
 fun LibraryScreen(
@@ -60,32 +55,27 @@ fun LibraryScreen(
     var tab by rememberSaveable { mutableStateOf(Tab.Songs) }
     Column(Modifier.fillMaxSize()) {
         if (state.query.isBlank()) {
-            Row(Modifier.padding(horizontal = 20.dp, vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(20.dp)) {
-                Tab.entries.forEach { t ->
-                    Text(
-                        t.label, style = MaterialTheme.typography.labelSmall,
-                        fontWeight = if (t == tab) FontWeight.Bold else FontWeight.Normal,
-                        color = if (t == tab) MaterialTheme.colorScheme.onBackground else MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.clickable { tab = t }.padding(vertical = 8.dp),
-                    )
-                }
-            }
+            val position by animateFloatAsState(tab.ordinal.toFloat(), Motion.settle(), label = "tab")
+            PillSwitch(Tab.entries.map { it.label }, position, { tab = Tab.entries[it] }, Modifier.padding(horizontal = 20.dp, vertical = 8.dp).fillMaxWidth())
         }
         when {
             !state.loaded -> Unit
             state.tracks.isEmpty() -> Empty("No music found", "Add some files to this phone and they'll show up here.")
             state.query.isNotBlank() -> SearchBody(state.results, onPlay, onAlbum, onArtist, actions)
-            // Tabs switch by tap only (a swipe changes section); the content crossfades instead of snapping.
-            else -> Crossfade(tab, animationSpec = tween(200), label = "library tab") { t ->
+            // Tabs switch by tap only (a swipe changes section); the new one slides in from its side.
+            else -> AnimatedContent(tab, transitionSpec = { slideStep(targetState > initialState) }, label = "library tab") { t ->
+                val settled = rememberSettled()
                 when (t) {
                     Tab.Songs -> LazyColumn(Modifier.fillMaxSize()) {
-                        items(state.tracks, key = { it.id }) { t -> SongRow(t, onClick = { onPlay(state.tracks, state.tracks.indexOf(t)) }, actions = actions) }
+                        itemsIndexed(state.tracks, key = { _, t -> t.id }) { i, t -> SongRow(t, onClick = { onPlay(state.tracks, i) }, actions = actions, modifier = Modifier.rise(settled, i)) }
                     }
                     Tab.Albums -> LazyVerticalGrid(
                         GridCells.Fixed(2), Modifier.fillMaxSize(), contentPadding = PaddingValues(20.dp),
                         horizontalArrangement = Arrangement.spacedBy(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp),
-                    ) { items(state.albums, key = { it.id }) { a -> AlbumCard(a, onClick = { onAlbum(a.id) }, actions = actions) } }
-                    Tab.Artists -> LazyColumn(Modifier.fillMaxSize()) { items(state.artists, key = { it.name }) { a -> ArtistRow(a, onClick = { onArtist(a.name) }) } }
+                    ) { itemsIndexed(state.albums, key = { _, a -> a.id }) { i, a -> AlbumCard(a, onClick = { onAlbum(a.id) }, actions = actions, modifier = Modifier.rise(settled, i)) } }
+                    Tab.Artists -> LazyColumn(Modifier.fillMaxSize()) {
+                        itemsIndexed(state.artists, key = { _, a -> a.name }) { i, a -> ArtistRow(a, onClick = { onArtist(a.name) }, modifier = Modifier.rise(settled, i)) }
+                    }
                     Tab.Playlists -> playlistsTab()
                 }
             }
@@ -106,7 +96,7 @@ private fun SearchBody(r: SearchResults, onPlay: (List<Track>, Int) -> Unit, onA
 
 @Composable
 private fun SongRowLike(title: String, subtitle: String, onClick: () -> Unit) {
-    Column(Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 20.dp, vertical = 8.dp)) {
+    Column(Modifier.fillMaxWidth().tap(onClick).padding(horizontal = 20.dp, vertical = 8.dp)) {
         Text(title, style = MaterialTheme.typography.titleMedium, maxLines = 1)
         Text(subtitle, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
     }
@@ -116,12 +106,13 @@ private fun SongRowLike(title: String, subtitle: String, onClick: () -> Unit) {
 private fun Eyebrow(text: String) =
     Text(text, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(start = 20.dp, top = 16.dp, bottom = 4.dp))
 
+/** Tsundoku's empty shelf: a big tight title and a quiet line under it, settling in. */
 @Composable
 fun Empty(title: String, body: String) {
-    Box(Modifier.fillMaxSize().padding(32.dp), contentAlignment = Alignment.Center) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(title, style = MaterialTheme.typography.headlineSmall)
-            Text(body, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 6.dp))
+    Box(Modifier.fillMaxSize().padding(horizontal = 40.dp, vertical = 32.dp), contentAlignment = Alignment.Center) {
+        Column(Modifier.enterFrom(offsetY = 12.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+            Text(title, color = Bold.Ink, fontSize = 28.sp, lineHeight = 32.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = (-1).sp, textAlign = TextAlign.Center)
+            Text(body, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center, modifier = Modifier.padding(top = 10.dp))
         }
     }
 }

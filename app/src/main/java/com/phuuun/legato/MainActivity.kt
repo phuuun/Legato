@@ -1,6 +1,8 @@
 package com.phuuun.legato
 
 import android.content.Intent
+import android.graphics.Color
+import androidx.activity.SystemBarStyle
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -37,7 +39,8 @@ class MainActivity : ComponentActivity() {
             shared = intent.sharedText()
             openPlayer = intent.action == OPEN_PLAYER
         }
-        enableEdgeToEdge()
+        // Legato is dark only: light status and navigation bar icons, whatever the system theme.
+        enableEdgeToEdge(SystemBarStyle.dark(Color.TRANSPARENT), SystemBarStyle.dark(Color.TRANSPARENT))
         val app = application as LegatoApp
         setContent {
             LegatoTheme {

@@ -1,6 +1,5 @@
 package com.phuuun.legato.ui.nowplaying
 
-import android.os.Build
 import android.os.SystemClock
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
@@ -42,15 +41,10 @@ import androidx.compose.material.icons.rounded.SkipNext
 import androidx.compose.material.icons.rounded.SkipPrevious
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Slider
-import androidx.compose.material3.SliderDefaults
-import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.FilledTonalButton
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
@@ -63,7 +57,6 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
@@ -74,6 +67,32 @@ import androidx.media3.common.Player
 import com.phuuun.legato.playback.SleepTimer
 import com.phuuun.legato.ui.components.Artwork
 import com.phuuun.legato.ui.components.swipeToSkip
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.foundation.border
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.material3.LocalContentColor
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import com.phuuun.legato.ui.components.BoldMenu
+import com.phuuun.legato.ui.components.PlayPauseIcon
+import com.phuuun.legato.ui.components.RoundButton
+import com.phuuun.legato.ui.components.SmallPill
+import com.phuuun.legato.ui.components.TapIcon
+import com.phuuun.legato.ui.components.boldSliderColors
+import com.phuuun.legato.ui.theme.Bold
+import com.phuuun.legato.ui.theme.Motion
+import com.phuuun.legato.ui.theme.enterFrom
+import com.phuuun.legato.ui.theme.pressScale
+import com.phuuun.legato.ui.theme.tap
 import kotlinx.coroutines.delay
 import kotlin.math.ceil
 import kotlinx.coroutines.launch
@@ -93,49 +112,50 @@ fun NowPlayingSheet(state: NowPlayingState, vm: NowPlayingViewModel, onDismiss: 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheet,
-        containerColor = MaterialTheme.colorScheme.background,
-        shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp),
+        containerColor = Bold.Paper,
+        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
         dragHandle = null,
     ) {
         Box(Modifier.fillMaxSize()) {
-            // The cover, blurred and washed over with the background, tints the whole player. Blur needs Android 12.
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                Artwork(state.artUri, Modifier.matchParentSize().blur(80.dp))
-                Box(Modifier.matchParentSize().background(MaterialTheme.colorScheme.background.copy(alpha = 0.7f)))
-            }
             Column(Modifier.fillMaxSize().safeDrawingPadding().padding(horizontal = 24.dp)) {
                 Box(Modifier.fillMaxWidth().padding(top = 12.dp)) {
                     // At most two buttons a side, so neither reaches the title in the middle.
-                    Row(Modifier.align(Alignment.CenterStart)) {
-                        IconButton(onClick = { scope.launch { sheet.hide() }.invokeOnCompletion { onDismiss() } }) {
-                            Icon(Icons.Rounded.KeyboardArrowDown, contentDescription = "Close")
+                    Row(Modifier.align(Alignment.CenterStart), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        RoundButton("Close", { scope.launch { sheet.hide() }.invokeOnCompletion { onDismiss() } }) {
+                            Icon(Icons.Rounded.KeyboardArrowDown, contentDescription = null)
                         }
                         state.trackId?.let { id ->
-                            IconButton(onClick = { scope.launch { sheet.hide() }.invokeOnCompletion { onDismiss(); onEdit(id) } }) {
-                                Icon(Icons.Rounded.Edit, contentDescription = "Edit info")
+                            RoundButton("Edit info", { scope.launch { sheet.hide() }.invokeOnCompletion { onDismiss(); onEdit(id) } }) {
+                                Icon(Icons.Rounded.Edit, contentDescription = null, Modifier.size(20.dp))
                             }
                         }
                     }
                     Text("NOW PLAYING", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.align(Alignment.Center))
-                    Row(Modifier.align(Alignment.CenterEnd)) {
+                    Row(Modifier.align(Alignment.CenterEnd), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         // A book swaps the queue for its chapters and bookmarks.
                         if (state.isAudiobook) {
                             state.trackId?.let { id ->
-                                IconButton(onClick = { marking = id to (vm.controller.value?.currentPosition ?: state.positionMs) }) { Icon(Icons.Rounded.BookmarkAdd, contentDescription = "Add bookmark") }
+                                RoundButton("Add bookmark", { marking = id to (vm.controller.value?.currentPosition ?: state.positionMs) }) { Icon(Icons.Rounded.BookmarkAdd, contentDescription = null, Modifier.size(20.dp)) }
                             }
-                            IconButton(onClick = { bookOpen = true }) { Icon(Icons.AutoMirrored.Rounded.List, contentDescription = "Chapters and bookmarks") }
+                            RoundButton("Chapters and bookmarks", { bookOpen = true }) { Icon(Icons.AutoMirrored.Rounded.List, contentDescription = null, Modifier.size(20.dp)) }
                         } else {
-                            IconButton(onClick = { queueOpen = true }) { Icon(Icons.AutoMirrored.Rounded.QueueMusic, contentDescription = "Queue") }
+                            RoundButton("Queue", { queueOpen = true }) { Icon(Icons.AutoMirrored.Rounded.QueueMusic, contentDescription = null, Modifier.size(20.dp)) }
                         }
                     }
                 }
                 Spacer(Modifier.weight(1f))
-                Artwork(state.artUri, Modifier.fillMaxWidth().aspectRatio(1f).swipeToSkip(vm::skip).clip(RoundedCornerShape(12.dp)))
+                // Settles in on open, and sits back a little while paused.
+                val artScale by animateFloatAsState(if (state.isPlaying) 1f else 0.88f, Motion.settle(), label = "art")
+                Artwork(
+                    state.artUri,
+                    Modifier.fillMaxWidth().aspectRatio(1f).enterFrom(scale = 0.9f, offsetY = 16.dp)
+                        .graphicsLayer { scaleX = artScale; scaleY = artScale }.swipeToSkip(vm::skip).clip(RoundedCornerShape(24.dp)),
+                )
                 Spacer(Modifier.weight(1f))
                 Text(state.title, style = MaterialTheme.typography.headlineSmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
                 Text(state.artist, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 chapters.lastOrNull { it.startMs <= state.positionMs }?.let { c ->
-                    Text(c.title, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 4.dp).clickable { bookOpen = true })
+                    Text(c.title, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 4.dp).tap({ bookOpen = true }))
                 }
                 Seek(state, vm::seekTo) {
                     if (state.isAudiobook) Marks(bookmarks.filter { it.trackId == state.trackId }.map { it.positionMs to bookmarkColor(it.color) }, state.durationMs)
@@ -147,23 +167,15 @@ fun NowPlayingSheet(state: NowPlayingState, vm: NowPlayingViewModel, onDismiss: 
                     if (state.isAudiobook) Speed(state.speed, vm::setSpeed)
                     else Toggle(Icons.Rounded.Shuffle, "Shuffle", state.shuffle, vm::toggleShuffle)
                     if (state.isAudiobook) {
-                        IconButton(onClick = vm::skipBack, modifier = Modifier.size(56.dp)) { Icon(Icons.Rounded.Replay10, "Back 10 seconds", Modifier.size(36.dp)) }
+                        TapIcon(onClick = vm::skipBack, modifier = Modifier.size(56.dp)) { Icon(Icons.Rounded.Replay10, "Back 10 seconds", Modifier.size(36.dp)) }
                     } else {
-                        IconButton(onClick = vm::previous, modifier = Modifier.size(56.dp)) { Icon(Icons.Rounded.SkipPrevious, "Previous", Modifier.size(36.dp)) }
+                        TapIcon(onClick = vm::previous, modifier = Modifier.size(56.dp)) { Icon(Icons.Rounded.SkipPrevious, "Previous", Modifier.size(36.dp)) }
                     }
-                    IconButton(
-                        onClick = vm::togglePlay,
-                        modifier = Modifier.size(72.dp).clip(CircleShape).background(MaterialTheme.colorScheme.onBackground),
-                    ) {
-                        Icon(
-                            if (state.isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow, if (state.isPlaying) "Pause" else "Play",
-                            Modifier.size(40.dp), tint = MaterialTheme.colorScheme.background,
-                        )
-                    }
+                    PlayButton(state.isPlaying, vm::togglePlay)
                     if (state.isAudiobook) {
-                        IconButton(onClick = vm::skipForward, modifier = Modifier.size(56.dp)) { Icon(Icons.Rounded.Forward10, "Forward 10 seconds", Modifier.size(36.dp)) }
+                        TapIcon(onClick = vm::skipForward, modifier = Modifier.size(56.dp)) { Icon(Icons.Rounded.Forward10, "Forward 10 seconds", Modifier.size(36.dp)) }
                     } else {
-                        IconButton(onClick = vm::next, modifier = Modifier.size(56.dp)) { Icon(Icons.Rounded.SkipNext, "Next", Modifier.size(36.dp)) }
+                        TapIcon(onClick = vm::next, modifier = Modifier.size(56.dp)) { Icon(Icons.Rounded.SkipNext, "Next", Modifier.size(36.dp)) }
                     }
                     if (state.isAudiobook) Sleep(vm.sleep)
                     else Toggle(
@@ -185,7 +197,20 @@ fun NowPlayingSheet(state: NowPlayingState, vm: NowPlayingViewModel, onDismiss: 
     }
 }
 
-/** "Back to 12:34" after a jump in a book; fades on its own. The slot keeps its height so nothing shifts. */
+/** The big Mint button: shrinks a little when pressed, and its icon pops between play and pause. */
+@Composable
+private fun PlayButton(playing: Boolean, onClick: () -> Unit) {
+    val source = remember { MutableInteractionSource() }
+    val pressed by source.collectIsPressedAsState()
+    Box(
+        Modifier.size(76.dp).pressScale(pressed).clip(CircleShape).background(Bold.Mint).border(2.dp, Bold.Paper, CircleShape)
+            .semantics { contentDescription = if (playing) "Pause" else "Play" }
+            .clickable(source, indication = null, role = Role.Button, onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) { CompositionLocalProvider(LocalContentColor provides Bold.DarkInk) { PlayPauseIcon(playing, Modifier.size(40.dp)) } }
+}
+
+/** "Back to 12:34" after a jump in a book; pops in and fades on its own. The slot keeps its height so nothing shifts. */
 @Composable
 private fun GoBack(vm: NowPlayingViewModel) {
     val spot by vm.backSpot.collectAsState()
@@ -193,12 +218,8 @@ private fun GoBack(vm: NowPlayingViewModel) {
     var last by remember { mutableStateOf(spot) }
     if (spot != null) last = spot
     Box(Modifier.fillMaxWidth().height(48.dp), contentAlignment = Alignment.Center) {
-        AnimatedVisibility(spot != null, enter = fadeIn(), exit = fadeOut()) {
-            FilledTonalButton(onClick = vm::goBack) {
-                Icon(Icons.AutoMirrored.Rounded.Undo, contentDescription = null, Modifier.size(18.dp))
-                Spacer(Modifier.width(8.dp))
-                Text("Back to ${formatTime(last?.positionMs ?: 0)}")
-            }
+        AnimatedVisibility(spot != null, enter = fadeIn(Motion.settle()) + scaleIn(Motion.pop(), 0.8f), exit = fadeOut(Motion.settle()) + scaleOut(Motion.settle(), 0.9f)) {
+            SmallPill("Back to ${formatTime(last?.positionMs ?: 0)}", vm::goBack, icon = Icons.AutoMirrored.Rounded.Undo)
         }
     }
 }
@@ -222,10 +243,7 @@ private fun Seek(state: NowPlayingState, onSeek: (Long) -> Unit, below: @Composa
         value = shown.coerceIn(0f, 1f), enabled = canSeek,
         onValueChange = { dragging = it },
         onValueChangeFinished = { dragging?.let { onSeek((it * state.durationMs).toLong()) }; dragging = null },
-        colors = SliderDefaults.colors(
-            thumbColor = MaterialTheme.colorScheme.onBackground, activeTrackColor = MaterialTheme.colorScheme.onBackground,
-            inactiveTrackColor = MaterialTheme.colorScheme.outline,
-        ),
+        colors = boldSliderColors(),
         modifier = Modifier.padding(top = 16.dp),
     )
     below()
@@ -245,8 +263,8 @@ private fun Speed(speed: Float, onPick: (Float) -> Unit) {
     var open by remember { mutableStateOf(false) }
     val label = { s: Float -> s.toString().removeSuffix(".0") + "×" }
     Box {
-        TextButton(onClick = { open = true }) { Text(label(speed), color = MaterialTheme.colorScheme.onBackground) }
-        DropdownMenu(open, { open = false }) {
+        SmallPill(label(speed), { open = true })
+        BoldMenu(open, { open = false }) {
             Speeds.forEach { s -> DropdownMenuItem(text = { Text(label(s)) }, onClick = { onPick(s); open = false }) }
         }
     }
@@ -261,12 +279,10 @@ private fun Sleep(timer: SleepTimer) {
     val now by produceState(SystemClock.elapsedRealtime(), mode) { while (true) { value = SystemClock.elapsedRealtime(); delay(1_000) } }
     Box {
         when (val m = mode) {
-            is SleepTimer.After -> TextButton(onClick = { open = true }) {
-                Text("${ceil((m.endsAt - now) / 60_000.0).toInt().coerceAtLeast(1)}m", color = MaterialTheme.colorScheme.onBackground)
-            }
+            is SleepTimer.After -> SmallPill("${ceil((m.endsAt - now) / 60_000.0).toInt().coerceAtLeast(1)}m", { open = true })
             else -> Toggle(Icons.Rounded.Bedtime, "Sleep timer", m == SleepTimer.ChapterEnd) { open = true }
         }
-        DropdownMenu(open, { open = false }) {
+        BoldMenu(open, { open = false }) {
             listOf(15, 30, 60).forEach { min -> DropdownMenuItem(text = { Text("$min minutes") }, onClick = { timer.after(min); open = false }) }
             DropdownMenuItem(text = { Text("End of chapter") }, onClick = { timer.atChapterEnd(); open = false })
             if (mode != null) DropdownMenuItem(text = { Text("Turn off") }, onClick = { timer.cancel(); open = false })
@@ -274,9 +290,16 @@ private fun Sleep(timer: SleepTimer) {
     }
 }
 
-/** Shuffle and repeat: lit when on, grey when off. Artwork stays the only colour. */
+/** Shuffle, repeat and the sleep timer: Mint when on, grey when off, with a pop when switched. */
 @Composable
-private fun Toggle(icon: ImageVector, label: String, on: Boolean, onClick: () -> Unit) =
-    IconButton(onClick = onClick) {
-        Icon(icon, label, tint = if (on) MaterialTheme.colorScheme.onBackground else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f))
+private fun Toggle(icon: ImageVector, label: String, on: Boolean, onClick: () -> Unit) {
+    val tint by animateColorAsState(if (on) Bold.Mint else Bold.Muted.copy(alpha = 0.6f), Motion.settle(), label = "toggle")
+    val pop = remember { Animatable(1f) }
+    val first = remember { booleanArrayOf(true) }
+    LaunchedEffect(on) {
+        if (first[0]) { first[0] = false; return@LaunchedEffect }
+        pop.snapTo(0.7f)
+        pop.animateTo(1f, Motion.pop())
     }
+    TapIcon(onClick = onClick, modifier = Modifier.graphicsLayer { scaleX = pop.value; scaleY = pop.value }) { Icon(icon, label, tint = tint) }
+}

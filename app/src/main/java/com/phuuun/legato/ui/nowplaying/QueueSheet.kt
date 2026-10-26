@@ -18,13 +18,9 @@ import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.DragHandle
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
-import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
@@ -47,6 +43,10 @@ import com.phuuun.legato.ui.components.Artwork
 import com.phuuun.legato.ui.components.occurrenceKeys
 import com.phuuun.legato.ui.components.offerUndo
 import com.phuuun.legato.ui.components.rememberReorder
+import com.phuuun.legato.ui.components.BoldSnackbarHost
+import com.phuuun.legato.ui.components.Sheet
+import com.phuuun.legato.ui.components.TapIcon
+import com.phuuun.legato.ui.theme.Bold
 import kotlinx.coroutines.launch
 
 private val RowHeight = 60.dp
@@ -81,7 +81,7 @@ fun QueueSheet(player: Player, onDismiss: () -> Unit) {
     val snackbar = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
 
-    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true), containerColor = MaterialTheme.colorScheme.surface) {
+    Sheet(onDismiss) {
         Text("QUEUE", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(start = 20.dp, bottom = 8.dp))
         val keys = remember(q) { occurrenceKeys(q.order) { q.items[it].mediaId } }
         Box {
@@ -93,16 +93,16 @@ fun QueueSheet(player: Player, onDismiss: () -> Unit) {
                     Row(
                         Modifier.animateItem(placementSpec = null).fillMaxWidth().height(RowHeight)
                             .then(reorder.row(pos))
-                            .background(if (isCurrent || reorder.dragging == pos) MaterialTheme.colorScheme.surfaceVariant else MaterialTheme.colorScheme.surface)
+                            .background(if (isCurrent || reorder.dragging == pos) Bold.SurfaceHigh else Bold.Surface)
                             .padding(start = 20.dp, end = 4.dp),
                         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp),
                     ) {
-                        Artwork(item.coverUri(), Modifier.size(40.dp).clip(RoundedCornerShape(6.dp)))
+                        Artwork(item.coverUri(), Modifier.size(40.dp).clip(RoundedCornerShape(10.dp)))
                         Column(Modifier.weight(1f)) {
-                            Text(item.mediaMetadata.title?.toString().orEmpty(), style = MaterialTheme.typography.labelLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            Text(item.mediaMetadata.title?.toString().orEmpty(), style = MaterialTheme.typography.labelLarge, color = if (isCurrent) Bold.Mint else Bold.Ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
                             Text(item.mediaMetadata.artist?.toString().orEmpty(), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         }
-                        IconButton(onClick = {
+                        TapIcon(onClick = {
                             player.removeItem(index)
                             scope.launch { snackbar.offerUndo("Removed ${item.mediaMetadata.title ?: "track"}") { player.addMediaItem(index.coerceAtMost(player.mediaItemCount), item) } }
                         }) { Icon(Icons.Rounded.Close, "Remove", tint = MaterialTheme.colorScheme.onSurfaceVariant) }
@@ -113,7 +113,7 @@ fun QueueSheet(player: Player, onDismiss: () -> Unit) {
                     }
                 }
             }
-            SnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter))
+            BoldSnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter))
         }
     }
 }

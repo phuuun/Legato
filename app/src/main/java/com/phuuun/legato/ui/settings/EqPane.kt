@@ -11,10 +11,10 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.FilterChip
+import com.phuuun.legato.ui.components.ChoicePill
+import com.phuuun.legato.ui.components.boldSliderColors
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
-import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -43,8 +43,8 @@ fun EqPane(store: EqStore) {
         }
         Text("Music only: audiobooks always play as recorded.", style = MaterialTheme.typography.bodyMedium, color = muted)
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            EqPreset.entries.forEach { p -> FilterChip(eq.preset == p, { store.set(eq.copy(on = true, gains = p.gains)) }, { Text(p.label) }) }
-            if (eq.preset == null) FilterChip(true, {}, { Text("Custom") })
+            EqPreset.entries.forEach { p -> ChoicePill(p.label, eq.preset == p, { store.set(eq.copy(on = true, gains = p.gains)) }, Modifier.padding(bottom = 8.dp)) }
+            if (eq.preset == null) ChoicePill("Custom", true, {}, Modifier.padding(bottom = 8.dp))
         }
         EqBands.forEachIndexed { i, hz ->
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -53,7 +53,7 @@ fun EqPane(store: EqStore) {
                 Slider(
                     eq.gains[i], { v -> store.set(eq.copy(on = true, gains = eq.gains.toMutableList().also { it[i] = (v * 2).roundToInt() / 2f })) },
                     valueRange = -12f..12f, enabled = eq.on, modifier = Modifier.weight(1f),
-                    colors = SliderDefaults.colors(thumbColor = MaterialTheme.colorScheme.onBackground, activeTrackColor = MaterialTheme.colorScheme.onBackground),
+                    colors = boldSliderColors(),
                 )
                 Text("%+.1f".format(eq.gains[i]), style = MaterialTheme.typography.labelMedium, color = muted, modifier = Modifier.width(44.dp).padding(start = 8.dp))
             }

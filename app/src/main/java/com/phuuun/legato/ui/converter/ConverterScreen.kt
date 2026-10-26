@@ -26,17 +26,12 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.ArrowDropDown
 import androidx.compose.material.icons.rounded.ContentPaste
-import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -89,6 +84,19 @@ import com.phuuun.legato.library.FolderKind
 import com.phuuun.legato.library.FolderStore
 import com.phuuun.legato.library.Track
 import com.phuuun.legato.ui.edit.Field
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.foundation.layout.size
+import com.phuuun.legato.ui.components.BoldMenu
+import com.phuuun.legato.ui.components.OutlinePill
+import com.phuuun.legato.ui.components.PillButton
+import com.phuuun.legato.ui.components.PillSwitch
+import com.phuuun.legato.ui.components.RoundButton
+import com.phuuun.legato.ui.components.SmallPill
+import com.phuuun.legato.ui.theme.Bold
+import com.phuuun.legato.ui.theme.Motion
+import com.phuuun.legato.ui.theme.enterFrom
+import com.phuuun.legato.ui.theme.shake
+import com.phuuun.legato.ui.theme.tap
 import com.phuuun.legato.ui.nowplaying.formatTime
 import com.phuuun.legato.ui.settings.rememberFolderPicker
 import kotlinx.coroutines.CoroutineScope
@@ -205,13 +213,13 @@ fun ConverterScreen(state: ConverterState, initialLink: String?, onInitialLinkUs
 
     LazyColumn(Modifier.fillMaxSize()) {
         item {
-            Row(Modifier.padding(horizontal = 20.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+            Row(Modifier.padding(horizontal = 20.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 Box(Modifier.weight(1f)) {
                     Field("YouTube link", link, onRemove = null) { link = it }
                 }
-                IconButton(onClick = { scope.launch { copied()?.let { link = it; load(it) } } }) { Icon(Icons.Rounded.ContentPaste, contentDescription = "Paste") }
+                RoundButton("Paste", { scope.launch { copied()?.let { link = it; load(it) } } }) { Icon(Icons.Rounded.ContentPaste, contentDescription = null, Modifier.size(20.dp)) }
             }
-            Button(onClick = { load(link) }, enabled = link.isNotBlank() && fetch != Fetch.Loading, modifier = Modifier.padding(horizontal = 20.dp)) { Text("Fetch") }
+            PillButton("Fetch", { load(link) }, Modifier.padding(horizontal = 20.dp, vertical = 4.dp), enabled = link.isNotBlank(), loading = fetch == Fetch.Loading)
             Text(
                 "Only save what you have the right to keep: your own uploads, or recordings that are Creative Commons or public domain.",
                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -226,13 +234,14 @@ fun ConverterScreen(state: ConverterState, initialLink: String?, onInitialLinkUs
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
-                Fetch.Loading -> Box(Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
-                is Fetch.Error -> Text(f.message, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(20.dp))
-                is Fetch.Ask -> Column(Modifier.padding(20.dp)) {
+                // The Fetch button spins meanwhile.
+                Fetch.Loading -> Unit
+                is Fetch.Error -> Text(f.message, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(20.dp).shake(f))
+                is Fetch.Ask -> Column(Modifier.padding(20.dp).enterFrom(offsetY = 12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     Text("This video is part of a playlist.", style = MaterialTheme.typography.bodyMedium)
-                    Row {
-                        TextButton(onClick = { loadVideo(f.link.video!!) }) { Text("Just this video") }
-                        TextButton(onClick = { loadPlaylist(f.link.playlist!!) }) { Text("Whole playlist") }
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        OutlinePill("Just this video", { loadVideo(f.link.video!!) }, Modifier.weight(1f))
+                        OutlinePill("Whole playlist", { loadPlaylist(f.link.playlist!!) }, Modifier.weight(1f))
                     }
                 }
                 is Fetch.One -> VideoCard(f.video, folders, downloads, library, audiobooks) { batch, kind -> queue(batch, kind) }
@@ -244,7 +253,7 @@ fun ConverterScreen(state: ConverterState, initialLink: String?, onInitialLinkUs
             item {
                 Row(Modifier.fillMaxWidth().padding(start = 20.dp, end = 8.dp, top = 16.dp), verticalAlignment = Alignment.CenterVertically) {
                     Text("DOWNLOADS", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.weight(1f))
-                    TextButton(onClick = downloads::clearFinished) { Text("Clear finished") }
+                    SmallPill("Clear finished", downloads::clearFinished, Modifier.padding(end = 12.dp))
                 }
             }
             items(jobs.asReversed(), key = { it.id }) { job -> Box(Modifier.animateItem()) { JobRow(job, onRetry = { downloads.retry(job.id); DownloadService.start(context) }) } }
@@ -267,8 +276,8 @@ private fun VideoCard(video: Video, folders: FolderStore, downloads: DownloadQue
     val choices by remember(kind) { folders.folders(kind) }.collectAsState(emptySet())
     var folder by remember(kind, choices) { mutableStateOf(folders.lastFolder(kind)?.takeIf { it in choices } ?: choices.sorted().firstOrNull()) }
 
-    Column(Modifier.padding(horizontal = 20.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        Thumbnail(video.thumbnail, Modifier.fillMaxWidth().aspectRatio(16f / 9f).clip(RoundedCornerShape(10.dp)))
+    Column(Modifier.padding(horizontal = 20.dp, vertical = 8.dp).enterFrom(scale = 0.96f, offsetY = 16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Thumbnail(video.thumbnail, Modifier.fillMaxWidth().aspectRatio(16f / 9f).clip(RoundedCornerShape(20.dp)))
         Column {
             Text(video.title, style = MaterialTheme.typography.titleMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
             Text("${video.uploader} · ${formatTime(video.durationSec * 1000)}", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -285,35 +294,30 @@ private fun VideoCard(video: Video, folders: FolderStore, downloads: DownloadQue
             ReplaceBox(oldBook, replace) { replace = it }
         }
         Destination(kind, choices, folder, onPick = { folder = it }, onAdd = { folders.add(kind, it); folder = it })
-        Button(
+        PillButton(
+            "Download",
             enabled = folder != null,
+            modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
             onClick = {
-                val dest = folder ?: return@Button
+                val dest = folder ?: return@PillButton
                 onDownload(
                     if (kind == FolderKind.Music) musicJobs(listOf(PickedVideo(video, artist, title, true, replace)), dest, downloads.nextId(), library)
                     else bookJobs(listOf(video), bookTitle, author, narrator, dest, downloads.nextId(), oldBook?.takeIf { replace }),
                     kind,
                 )
             },
-        ) { Text("Download") }
+        )
     }
 }
 
 @Composable
-private fun KindToggle(kind: FolderKind, onKind: (FolderKind) -> Unit) =
-    Row(horizontalArrangement = Arrangement.spacedBy(20.dp)) {
-        FolderKind.entries.forEach { k ->
-            Text(
-                if (k == FolderKind.Music) "MUSIC" else "AUDIOBOOK", style = MaterialTheme.typography.labelSmall,
-                fontWeight = if (k == kind) FontWeight.Bold else FontWeight.Normal,
-                color = if (k == kind) MaterialTheme.colorScheme.onBackground else MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.clickable { onKind(k) }.padding(vertical = 8.dp),
-            )
-        }
-    }
+private fun KindToggle(kind: FolderKind, onKind: (FolderKind) -> Unit) {
+    val position by animateFloatAsState(kind.ordinal.toFloat(), Motion.settle(), label = "kind")
+    PillSwitch(FolderKind.entries.map { if (it == FolderKind.Music) "Music" else "Audiobook" }, position, { onKind(FolderKind.entries[it]) }, Modifier.fillMaxWidth())
+}
 
 /** What a playlist becomes: loose songs, one album, or one audiobook. */
-internal enum class PlaylistAs(val label: String, val kind: FolderKind) { Songs("MUSIC", FolderKind.Music), Album("ALBUM", FolderKind.Music), Book("AUDIOBOOK", FolderKind.Audiobooks) }
+internal enum class PlaylistAs(val label: String, val kind: FolderKind) { Songs("Music", FolderKind.Music), Album("Album", FolderKind.Music), Book("Audiobook", FolderKind.Audiobooks) }
 
 /**
  * A playlist as list items: header with MUSIC / ALBUM / AUDIOBOOK, one row per video (ticked, with its guess for
@@ -330,21 +334,13 @@ private fun LazyListScope.playlist(
 
 @Composable
 private fun PlaylistHead(playlist: Playlist, choices: PlaylistChoices) {
-    Column(Modifier.padding(horizontal = 20.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+    Column(Modifier.padding(horizontal = 20.dp, vertical = 8.dp).enterFrom(scale = 0.96f, offsetY = 16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Column {
             Text(playlist.name, style = MaterialTheme.typography.titleMedium)
             Text("${playlist.videos.size} videos", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
-        Row(horizontalArrangement = Arrangement.spacedBy(20.dp)) {
-            PlaylistAs.entries.forEach { m ->
-                Text(
-                    m.label, style = MaterialTheme.typography.labelSmall,
-                    fontWeight = if (m == choices.mode) FontWeight.Bold else FontWeight.Normal,
-                    color = if (m == choices.mode) MaterialTheme.colorScheme.onBackground else MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.clickable { choices.mode = m }.padding(vertical = 8.dp),
-                )
-            }
-        }
+        val position by animateFloatAsState(choices.mode.ordinal.toFloat(), Motion.settle(), label = "playlist as")
+        PillSwitch(PlaylistAs.entries.map { it.label }, position, { choices.mode = PlaylistAs.entries[it] }, Modifier.fillMaxWidth())
         if (choices.mode == PlaylistAs.Album) {
             Field("Album", choices.albumTitle) { choices.albumTitle = it }
             Field("Album artist", choices.albumArtist) { choices.albumArtist = it }
@@ -385,10 +381,12 @@ private fun PlaylistFoot(choices: PlaylistChoices, picks: SnapshotStateList<Pick
 
     Column(Modifier.padding(horizontal = 20.dp, vertical = 5.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Destination(kind, options, folder, onPick = { choices.folder = it }, onAdd = { folders.add(kind, it); choices.folder = it })
-        Button(
+        PillButton(
+            "Download $ticked",
             enabled = folder != null && ticked > 0,
+            modifier = Modifier.fillMaxWidth().padding(top = 4.dp, bottom = 8.dp),
             onClick = {
-                val dest = folder ?: return@Button
+                val dest = folder ?: return@PillButton
                 onDownload(
                     when (mode) {
                         PlaylistAs.Songs -> musicJobs(picks, dest, downloads.nextId(), library)
@@ -398,7 +396,7 @@ private fun PlaylistFoot(choices: PlaylistChoices, picks: SnapshotStateList<Pick
                     kind,
                 )
             },
-        ) { Text("Download $ticked") }
+        )
     }
 }
 
@@ -406,7 +404,7 @@ private fun PlaylistFoot(choices: PlaylistChoices, picks: SnapshotStateList<Pick
 @Composable
 private fun ReplaceBox(old: Track?, replace: Boolean, onReplace: (Boolean) -> Unit) {
     old ?: return
-    Row(Modifier.clickable { onReplace(!replace) }, verticalAlignment = Alignment.CenterVertically) {
+    Row(Modifier.tap({ onReplace(!replace) }), verticalAlignment = Alignment.CenterVertically) {
         Checkbox(replace, onCheckedChange = onReplace)
         Text(
             if (replace) "Replaces ${old.path.substringAfterLast('/')}" else "Keeps ${old.path.substringAfterLast('/')} too",
@@ -421,7 +419,7 @@ private fun Destination(kind: FolderKind, choices: Set<String>, folder: String?,
     val pick = rememberFolderPicker(onAdd)
     var open by remember { mutableStateOf(false) }
     if (choices.isEmpty()) {
-        TextButton(onClick = pick) { Icon(Icons.Rounded.Add, null); Text("Add folder", Modifier.padding(start = 8.dp)) }
+        SmallPill("Add folder", pick, icon = Icons.Rounded.Add)
         Text(
             "Pick where ${if (kind == FolderKind.Music) "music" else "audiobooks"} should go. It's added to Settings too.",
             style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -429,12 +427,12 @@ private fun Destination(kind: FolderKind, choices: Set<String>, folder: String?,
         return
     }
     Box {
-        Row(Modifier.clickable { open = true }.padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(Modifier.tap({ open = true }).padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
             Text("Save to ", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Text(folder?.trimEnd('/') ?: "", style = MaterialTheme.typography.bodyLarge)
             Icon(Icons.Rounded.ArrowDropDown, contentDescription = "Choose folder")
         }
-        DropdownMenu(open, { open = false }) {
+        BoldMenu(open, { open = false }) {
             choices.sorted().forEach { f -> DropdownMenuItem(text = { Text(f.trimEnd('/')) }, onClick = { onPick(f); open = false }) }
             DropdownMenuItem(text = { Text("Add folder…") }, onClick = { open = false; pick() })
         }
@@ -450,13 +448,14 @@ private fun JobRow(job: DownloadJob, onRetry: () -> Unit) {
             JobState.Queued -> Text("Waiting · ${job.folder.trimEnd('/')}", style = MaterialTheme.typography.bodyMedium, color = muted)
             is JobState.Downloading -> {
                 Text("Downloading ${s.percent}%", style = MaterialTheme.typography.bodyMedium, color = muted)
-                LinearProgressIndicator(progress = { s.percent / 100f }, modifier = Modifier.fillMaxWidth().padding(top = 4.dp))
+                val shown by animateFloatAsState(s.percent / 100f, Motion.settle(), label = "job")
+                LinearProgressIndicator(progress = { shown }, modifier = Modifier.fillMaxWidth().padding(top = 6.dp), color = Bold.Mint, trackColor = Bold.QuietLine)
             }
             JobState.Tagging -> Text("Saving…", style = MaterialTheme.typography.bodyMedium, color = muted)
             JobState.Done -> Text("Saved to ${job.folder.trimEnd('/')}", style = MaterialTheme.typography.bodyMedium, color = muted)
             is JobState.Failed -> Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(s.reason, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.error, modifier = Modifier.weight(1f))
-                TextButton(onClick = onRetry) { Text("Retry") }
+                SmallPill("Retry", onRetry, Modifier.padding(start = 8.dp))
             }
         }
     }

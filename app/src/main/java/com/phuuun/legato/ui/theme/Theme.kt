@@ -1,58 +1,77 @@
 package com.phuuun.legato.ui.theme
 
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Typography
 import androidx.compose.material3.darkColorScheme
-import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.Font
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
+import com.phuuun.legato.R
 
-// Same monochrome palette as Before and Tsundoku: pure black at night, ivory paper by day. The artwork is the only colour.
+/** Tsundoku's Bold palette, with Mint as the one accent (no Tomato or Pink): dark paper, ink, a few loud colours. Dark only. */
+object Bold {
+    val Paper = Color(0xFF0B0B0C)
+    val Surface = Color(0xFF161618)
+    val SurfaceHigh = Color(0xFF1F1F22)
+    val Ink = Color(0xFFF4F4F5)
+    val Muted = Color(0xFFA1A1AA)
+    val Placeholder = Color(0xFF8B8B93)
+    val QuietLine = Color(0xFF3F3F46)
+    val DarkInk = Color(0xFF151515)
+    val Yellow = Color(0xFFFFC93C)
+    val Mint = Color(0xFF3DDC97)
+    val Error = Color(0xFFFF6B6B)
+}
+
 internal val DarkScheme = darkColorScheme(
-    primary = Color.White, onPrimary = Color.Black,
-    background = Color.Black, onBackground = Color.White,
-    surface = Color(0xFF0D0D0E), onSurface = Color.White,
-    surfaceVariant = Color(0xFF161618), onSurfaceVariant = Color(0xFFA1A1AA),
-    outline = Color(0xFF26262A), outlineVariant = Color(0xFF3F3F46),
-    error = Color(0xFFFF6B6B),
-    // Sheets and menus read these; unset they fall back to Material's lavender tint.
-    surfaceContainerLowest = Color.Black, surfaceContainerLow = Color(0xFF0D0D0E),
-    surfaceContainer = Color(0xFF161618), surfaceContainerHigh = Color(0xFF1C1C1F),
-    surfaceContainerHighest = Color(0xFF26262A),
+    primary = Bold.Mint, onPrimary = Bold.DarkInk,
+    primaryContainer = Bold.Mint, onPrimaryContainer = Bold.DarkInk,
+    secondary = Bold.Ink, onSecondary = Bold.Paper,
+    secondaryContainer = Bold.SurfaceHigh, onSecondaryContainer = Bold.Ink,
+    background = Bold.Paper, onBackground = Bold.Ink,
+    surface = Bold.Paper, onSurface = Bold.Ink,
+    surfaceVariant = Bold.Surface, onSurfaceVariant = Bold.Muted,
+    outline = Bold.QuietLine, outlineVariant = Bold.QuietLine,
+    error = Bold.Error, onError = Bold.DarkInk,
+    // Sheets, menus, sliders and tonal buttons read these; unset they fall back to Material's lavender tint.
+    surfaceContainerLowest = Bold.Paper, surfaceContainerLow = Bold.Surface,
+    surfaceContainer = Bold.Surface, surfaceContainerHigh = Bold.SurfaceHigh,
+    surfaceContainerHighest = Bold.SurfaceHigh,
+    inverseSurface = Bold.Ink, inverseOnSurface = Bold.Paper, inversePrimary = Bold.Mint,
 )
 
-private val Ink = Color(0xFF2A2924)
-internal val LightScheme = lightColorScheme(
-    primary = Ink, onPrimary = Color.White,
-    background = Color(0xFFFFFDF4), onBackground = Ink,
-    surface = Color(0xFFFFFEF9), onSurface = Ink,
-    surfaceVariant = Color(0xFFF3F0E3), onSurfaceVariant = Color(0xFF6B685C),
-    outline = Color(0xFFDDD9C8), outlineVariant = Color(0xFFBDB8A6),
-    error = Color(0xFFC0392B),
-    surfaceContainerLowest = Color(0xFFFFFEF9), surfaceContainerLow = Color(0xFFFFFDF4),
-    surfaceContainer = Color(0xFFFAF8EE), surfaceContainerHigh = Color(0xFFF6F3E8),
-    surfaceContainerHighest = Color(0xFFF3F0E3),
+private val Bricolage = FontFamily(
+    Font(R.font.bricolage_grotesque_regular, FontWeight.Normal),
+    Font(R.font.bricolage_grotesque_semibold, FontWeight.SemiBold),
+    Font(R.font.bricolage_grotesque_bold, FontWeight.Bold),
+    Font(R.font.bricolage_grotesque_extrabold, FontWeight.ExtraBold),
 )
 
+// Every style Legato or a Material component reads is set, so nothing falls back to Roboto.
 private val Type = Typography(
-    // Big tight titles, like an iOS large title.
-    headlineLarge = TextStyle(fontWeight = FontWeight.Bold, fontSize = 34.sp, lineHeight = 40.sp, letterSpacing = (-1).sp),
-    headlineSmall = TextStyle(fontWeight = FontWeight.Bold, fontSize = 24.sp, lineHeight = 30.sp, letterSpacing = (-0.5).sp),
-    titleMedium = TextStyle(fontWeight = FontWeight.SemiBold, fontSize = 16.sp, lineHeight = 21.sp, letterSpacing = (-0.2).sp),
-    bodyLarge = TextStyle(fontSize = 16.sp, lineHeight = 22.sp),
-    bodyMedium = TextStyle(fontSize = 14.sp, lineHeight = 20.sp),
+    // The big section title.
+    headlineLarge = TextStyle(fontFamily = Bricolage, fontWeight = FontWeight.ExtraBold, fontSize = 50.sp, lineHeight = 50.sp, letterSpacing = (-2.5).sp),
+    // Album, artist and playlist names.
+    headlineMedium = TextStyle(fontFamily = Bricolage, fontWeight = FontWeight.ExtraBold, fontSize = 34.sp, lineHeight = 36.sp, letterSpacing = (-1.2).sp),
+    headlineSmall = TextStyle(fontFamily = Bricolage, fontWeight = FontWeight.ExtraBold, fontSize = 26.sp, lineHeight = 32.sp, letterSpacing = (-0.8).sp),
+    titleLarge = TextStyle(fontFamily = Bricolage, fontWeight = FontWeight.ExtraBold, fontSize = 22.sp, lineHeight = 28.sp, letterSpacing = (-0.5).sp),
+    titleMedium = TextStyle(fontFamily = Bricolage, fontWeight = FontWeight.Bold, fontSize = 16.sp, lineHeight = 21.sp, letterSpacing = (-0.2).sp),
+    titleSmall = TextStyle(fontFamily = Bricolage, fontWeight = FontWeight.Bold, fontSize = 14.sp, lineHeight = 20.sp),
+    bodyLarge = TextStyle(fontFamily = Bricolage, fontSize = 16.sp, lineHeight = 22.sp),
+    bodyMedium = TextStyle(fontFamily = Bricolage, fontSize = 14.sp, lineHeight = 20.sp),
+    bodySmall = TextStyle(fontFamily = Bricolage, fontSize = 12.sp, lineHeight = 16.sp),
     // Track title and artist in a row.
-    labelLarge = TextStyle(fontWeight = FontWeight.SemiBold, fontSize = 13.sp, lineHeight = 17.sp),
-    labelMedium = TextStyle(fontSize = 12.sp, lineHeight = 16.sp),
-    // Small caps-style eyebrows and pills: LEGATO, SONGS, NOW PLAYING.
-    labelSmall = TextStyle(fontWeight = FontWeight.SemiBold, fontSize = 11.sp, lineHeight = 14.sp, letterSpacing = 1.5.sp),
+    labelLarge = TextStyle(fontFamily = Bricolage, fontWeight = FontWeight.Bold, fontSize = 13.sp, lineHeight = 17.sp),
+    labelMedium = TextStyle(fontFamily = Bricolage, fontWeight = FontWeight.Medium, fontSize = 12.sp, lineHeight = 16.sp),
+    // Small caps-style eyebrows and stickers: SONGS, NOW PLAYING, FINISHED.
+    labelSmall = TextStyle(fontFamily = Bricolage, fontWeight = FontWeight.Bold, fontSize = 11.sp, lineHeight = 14.sp, letterSpacing = 1.sp),
 )
 
 @Composable
 fun LegatoTheme(content: @Composable () -> Unit) {
-    MaterialTheme(colorScheme = if (isSystemInDarkTheme()) DarkScheme else LightScheme, typography = Type, content = content)
+    MaterialTheme(colorScheme = DarkScheme, typography = Type, content = content)
 }

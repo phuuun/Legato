@@ -1,6 +1,14 @@
 package com.phuuun.legato.ui.settings
 
-import androidx.compose.foundation.clickable
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.layout.Arrangement
+import com.phuuun.legato.ui.components.ChoicePill
+import com.phuuun.legato.ui.theme.Motion
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -24,7 +32,7 @@ import androidx.compose.ui.unit.dp
 import com.phuuun.legato.ui.components.screen
 import com.phuuun.legato.ui.library.Back
 
-enum class SettingsSection(val label: String) { Music("MUSIC"), Audiobooks("AUDIOBOOKS"), Converter("CONVERTER"), Sound("SOUND"), Backup("BACKUP") }
+enum class SettingsSection(val label: String) { Music("Music"), Audiobooks("Audiobooks"), Converter("Converter"), Sound("Sound"), Backup("Backup") }
 
 /** Two panes like a file manager: sections on the left, the chosen section's settings scroll on the right. */
 @Composable
@@ -36,18 +44,16 @@ fun SettingsScreen(onBack: () -> Unit, pane: @Composable (SettingsSection) -> Un
             Text("Settings", style = MaterialTheme.typography.headlineSmall)
         }
         Row(Modifier.fillMaxSize().padding(top = 8.dp)) {
-            Column(Modifier.width(120.dp)) {
-                SettingsSection.entries.forEach { s ->
-                    Text(
-                        s.label, style = MaterialTheme.typography.labelSmall,
-                        fontWeight = if (s == selected) FontWeight.Bold else FontWeight.Normal,
-                        color = if (s == selected) MaterialTheme.colorScheme.onBackground else MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.fillMaxWidth().clickable { selected = s }.padding(start = 20.dp, top = 12.dp, bottom = 12.dp),
-                    )
-                }
+            Column(Modifier.width(136.dp).padding(start = 16.dp, end = 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                SettingsSection.entries.forEach { s -> ChoicePill(s.label, s == selected, { selected = s }, Modifier.fillMaxWidth()) }
             }
-            VerticalDivider(Modifier.fillMaxHeight(), thickness = 0.5.dp, color = MaterialTheme.colorScheme.outline)
-            Box(Modifier.weight(1f)) { pane(selected) }
+            VerticalDivider(Modifier.fillMaxHeight(), thickness = 2.dp, color = MaterialTheme.colorScheme.outline)
+            // The chosen section's pane slides in from above or below, by where it sits in the list.
+            AnimatedContent(selected, Modifier.weight(1f), transitionSpec = {
+                val dir = if (targetState > initialState) 1 else -1
+                (slideInVertically(Motion.settle()) { dir * it / 6 } + fadeIn(Motion.settle())) togetherWith
+                    (slideOutVertically(Motion.settle()) { -dir * it / 6 } + fadeOut(Motion.settle()))
+            }, label = "settings pane") { pane(it) }
         }
     }
 }

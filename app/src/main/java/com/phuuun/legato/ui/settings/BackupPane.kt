@@ -10,10 +10,11 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
+import com.phuuun.legato.ui.components.BoldDialog
+import com.phuuun.legato.ui.components.OutlinePill
+import com.phuuun.legato.ui.components.PillButton
+import com.phuuun.legato.ui.components.SmallPill
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -50,11 +51,11 @@ fun BackupPane(backups: Backups, backUp: (done: () -> Unit) -> Unit, restore: (U
             },
             style = MaterialTheme.typography.bodyMedium,
         )
-        Button(onClick = { backUp { refresh++ } }) { Text("Back up now") }
-        backups.file?.let { OutlinedButton(onClick = { confirmingDaily = true }) { Text("Restore ${it.nameWithoutExtension.removePrefix(backups.name).trim()}") } }
-        TextButton(onClick = { pick.launch(arrayOf("application/json", "text/plain", "application/octet-stream")) }) { Text("Restore from another file…") }
+        PillButton("Back up now", { backUp { refresh++ } })
+        backups.file?.let { OutlinePill("Restore ${it.nameWithoutExtension.removePrefix(backups.name).trim()}", { confirmingDaily = true }) }
+        SmallPill("Restore from another file…", { pick.launch(arrayOf("application/json", "text/plain", "application/octet-stream")) })
     } }
-    if (confirming != null || confirmingDaily) AlertDialog(
+    if (confirming != null || confirmingDaily) BoldDialog(
         onDismissRequest = { confirming = null; confirmingDaily = false },
         title = { Text("Restore this backup?") },
         text = { Text("Playlists, bookmarks, edits, folders and hidden files are replaced with the backup's. Listening progress and play counts are added.") },

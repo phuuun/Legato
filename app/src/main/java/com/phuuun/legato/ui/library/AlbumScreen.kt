@@ -51,22 +51,29 @@ import com.phuuun.legato.library.Artist
 import com.phuuun.legato.library.Track
 import com.phuuun.legato.ui.components.Artwork
 import com.phuuun.legato.ui.components.rememberReorder
+import com.phuuun.legato.ui.components.OutlinePill
+import com.phuuun.legato.ui.components.PillButton
+import com.phuuun.legato.ui.components.RoundButton
+import com.phuuun.legato.ui.components.SmallPill
+import com.phuuun.legato.ui.theme.enterFrom
+import com.phuuun.legato.ui.theme.rememberSettled
+import com.phuuun.legato.ui.theme.rise
+import androidx.compose.foundation.lazy.grid.itemsIndexed
 
+/** The round back button at the top left of every page. */
 @Composable
 fun Back(onBack: () -> Unit) =
-    IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back") }
+    RoundButton("Back", onBack, Modifier.padding(start = 20.dp, end = 12.dp, top = 4.dp, bottom = 4.dp)) {
+        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null, Modifier.size(20.dp))
+    }
 
 /** Play from the top, or the same tracks shuffled. */
 @Composable
 fun PlayShuffle(tracks: List<Track>, onPlay: (List<Track>, Int) -> Unit, modifier: Modifier = Modifier) {
     if (tracks.isEmpty()) return
     Row(modifier, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-        Button(onClick = { onPlay(tracks, 0) }) {
-            Icon(Icons.Rounded.PlayArrow, contentDescription = null, Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text("Play")
-        }
-        OutlinedButton(onClick = { onPlay(tracks.shuffled(), 0) }) {
-            Icon(Icons.Rounded.Shuffle, contentDescription = null, Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text("Shuffle")
-        }
+        PillButton("Play", { onPlay(tracks, 0) }, icon = Icons.Rounded.PlayArrow)
+        OutlinePill("Shuffle", { onPlay(tracks.shuffled(), 0) }, icon = Icons.Rounded.Shuffle)
     }
 }
 
@@ -81,18 +88,19 @@ fun AlbumScreen(album: Album?, onBack: () -> Unit, onPlay: (List<Track>, Int) ->
     Column(Modifier.screen()) {
         Back(onBack)
         if (album == null) { Empty("Album not found", "It may have been deleted."); return }
+        val settled = rememberSettled()
         LazyColumn(Modifier.fillMaxSize()) {
             item {
                 Column(Modifier.padding(horizontal = 20.dp, vertical = 8.dp)) {
-                    Artwork(album.artUri, Modifier.fillMaxWidth().aspectRatio(1f).clip(RoundedCornerShape(10.dp)))
+                    Artwork(album.artUri, Modifier.fillMaxWidth().aspectRatio(1f).enterFrom(scale = 0.9f, offsetY = 8.dp).clip(RoundedCornerShape(20.dp)))
                     Text(album.title, style = MaterialTheme.typography.headlineSmall, modifier = Modifier.padding(top = 16.dp))
                     Text(album.artist, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     header()
-                    if (onReorder != null) Row(Modifier.padding(top = 4.dp)) {
-                        if (!editing) TextButton(onClick = { order.clear(); order += album.tracks; editing = true }) { Text("Edit order") }
+                    if (onReorder != null) Row(Modifier.padding(top = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        if (!editing) SmallPill("Edit order", { order.clear(); order += album.tracks; editing = true })
                         else {
-                            TextButton(onClick = { onReorder(order.toList()); editing = false }) { Text("Save") }
-                            TextButton(onClick = { editing = false }) { Text("Cancel") }
+                            SmallPill("Save", { onReorder(order.toList()); editing = false })
+                            SmallPill("Cancel", { editing = false })
                         }
                     }
                 }
@@ -106,7 +114,7 @@ fun AlbumScreen(album: Album?, onBack: () -> Unit, onPlay: (List<Track>, Int) ->
                     Icon(Icons.Rounded.DragHandle, "Reorder", tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(48.dp).then(reorder.handle(pos)).padding(12.dp))
                 }
             }
-            else items(album.tracks, key = { it.id }) { t -> SongRow(t, onClick = { onPlay(album.tracks, album.tracks.indexOf(t)) }, actions = actions) }
+            else itemsIndexed(album.tracks, key = { _, t -> t.id }) { i, t -> SongRow(t, onClick = { onPlay(album.tracks, i) }, actions = actions, modifier = Modifier.rise(settled, i + 1)) }
         }
     }
 }
@@ -116,8 +124,9 @@ fun ArtistScreen(artist: Artist?, onBack: () -> Unit, onAlbum: (Long) -> Unit, o
     Column(Modifier.screen()) {
         Back(onBack)
         if (artist == null) { Empty("Artist not found", "It may have been deleted."); return }
-        Text(artist.name, style = MaterialTheme.typography.headlineLarge, modifier = Modifier.padding(horizontal = 20.dp))
+        Text(artist.name, style = MaterialTheme.typography.headlineMedium, modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp))
         PlayShuffle(artist.tracks, onPlay, Modifier.padding(start = 20.dp, top = 12.dp))
+        val settled = rememberSettled()
         LazyVerticalGrid(
             GridCells.Fixed(2), Modifier.fillMaxSize(), contentPadding = PaddingValues(20.dp),
             horizontalArrangement = Arrangement.spacedBy(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp),
@@ -125,9 +134,9 @@ fun ArtistScreen(artist: Artist?, onBack: () -> Unit, onAlbum: (Long) -> Unit, o
             // Section titles only when there's more than their own albums: an artist with just those keeps a plain grid.
             val titled = artist.appearsOn.isNotEmpty() || artist.songs.isNotEmpty()
             if (titled && artist.albums.isNotEmpty()) item(span = { GridItemSpan(maxLineSpan) }) { Section("ALBUMS") }
-            items(artist.albums, key = { it.id }) { a -> AlbumCard(a, onClick = { onAlbum(a.id) }, actions = actions) }
+            itemsIndexed(artist.albums, key = { _, a -> a.id }) { i, a -> AlbumCard(a, onClick = { onAlbum(a.id) }, actions = actions, modifier = Modifier.rise(settled, i)) }
             if (artist.appearsOn.isNotEmpty()) item(span = { GridItemSpan(maxLineSpan) }) { Section("APPEARS ON") }
-            items(artist.appearsOn, key = { "on" + it.id }) { a -> AlbumCard(a, onClick = { onAlbum(a.id) }, actions = actions) }
+            itemsIndexed(artist.appearsOn, key = { _, a -> "on" + a.id }) { i, a -> AlbumCard(a, onClick = { onAlbum(a.id) }, actions = actions, modifier = Modifier.rise(settled, artist.albums.size + i)) }
             if (artist.songs.isNotEmpty()) item(span = { GridItemSpan(maxLineSpan) }) { Section("SONGS") }
             items(artist.songs, key = { "s" + it.id }, span = { GridItemSpan(maxLineSpan) }) { t ->
                 SongRow(t, onClick = { onPlay(artist.songs, artist.songs.indexOf(t)) }, actions = actions, modifier = Modifier.bleed(20.dp))

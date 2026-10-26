@@ -1,19 +1,19 @@
 package com.phuuun.legato.ui.theme
 
-import androidx.compose.ui.graphics.Color
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
 class ThemeTest {
     @Test
-    fun dark_background_is_pure_black() {
-        assertEquals(Color(0xFF000000), DarkScheme.background)
-        assertEquals(Color(0xFF000000), DarkScheme.surfaceContainerLowest)
+    fun scheme_is_the_bold_palette() {
+        assertEquals(Bold.Paper, DarkScheme.background)
+        assertEquals(Bold.Mint, DarkScheme.primary)
     }
 
     @Test
-    fun light_background_is_ivory() {
-        assertEquals(Color(0xFFFFFDF4), LightScheme.background)
-        assertEquals(Color(0xFF2A2924), LightScheme.primary)
+    fun containers_never_fall_back_to_material_lavender() {
+        assertEquals(Bold.Paper, DarkScheme.surfaceContainerLowest)
+        assertEquals(Bold.SurfaceHigh, DarkScheme.surfaceContainerHigh)
+        assertEquals(Bold.SurfaceHigh, DarkScheme.secondaryContainer)
     }
 }

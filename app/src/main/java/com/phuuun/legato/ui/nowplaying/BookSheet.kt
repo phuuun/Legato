@@ -18,16 +18,11 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Edit
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -43,6 +38,24 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.phuuun.legato.library.Bookmark
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandHorizontally
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkHorizontally
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.ui.graphics.graphicsLayer
+import com.phuuun.legato.ui.components.BoldDialog
+import com.phuuun.legato.ui.components.PillSwitch
+import com.phuuun.legato.ui.components.RoundButton
+import com.phuuun.legato.ui.components.Sheet
+import com.phuuun.legato.ui.components.TapIcon
+import com.phuuun.legato.ui.edit.Field
+import com.phuuun.legato.ui.theme.Bold
+import com.phuuun.legato.ui.theme.Motion
+import com.phuuun.legato.ui.theme.slideStep
+import com.phuuun.legato.ui.theme.tap
 
 /** Bookmark colours, by the index a bookmark stores. Yellow first: it's the default. */
 val BookmarkColors = listOf(Color(0xFFFFC53D), Color(0xFFE5484D), Color(0xFFF76B15), Color(0xFF46A758), Color(0xFF0090FF), Color(0xFF8E4EC6))
@@ -68,54 +81,56 @@ fun BookSheet(state: NowPlayingState, vm: NowPlayingViewModel, onDismiss: () -> 
     val playing = player.currentMediaItemIndex
     val indexOf = remember(files) { files.withIndex().associate { (i, f) -> f.mediaId.toLongOrNull() to i } }
     val here = chapters.lastOrNull { it.startMs <= state.positionMs }
-    val go = { index: Int, ms: Long -> vm.jumpTo(index, ms); onDismiss() }
-
-    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true), containerColor = MaterialTheme.colorScheme.surface) {
+    // A jump slides the sheet away first, then the player offers the way back.
+    Sheet(onDismiss) { close ->
+        val go = { index: Int, ms: Long -> vm.jumpTo(index, ms); close() }
         val path = state.path
-        if (editingChapters && path != null) {
-            ChapterEditor(chapters, state.positionMs, chaptersSaved, onSave = { vm.saveChapters(path, it) }, onReset = { vm.resetChapters(path) }, onClose = { editingChapters = false })
-            return@ModalBottomSheet
-        }
-        Row(Modifier.padding(start = 20.dp, end = 8.dp, bottom = 8.dp), horizontalArrangement = Arrangement.spacedBy(20.dp), verticalAlignment = Alignment.CenterVertically) {
-            listOf("CHAPTERS", "BOOKMARKS").forEachIndexed { i, label ->
-                Text(
-                    label, style = MaterialTheme.typography.labelSmall,
-                    fontWeight = if (tab == i) FontWeight.Bold else FontWeight.Normal,
-                    color = if (tab == i) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.clickable { tab = i }.padding(vertical = 8.dp),
-                )
-            }
-            Spacer(Modifier.weight(1f))
-            // For the file playing: a book of chapter files lists its own chapters under the one playing.
-            if (tab == 0 && path != null) Row {
-                IconButton(onClick = { chapterfyOpen = true }) { Icon(Icons.Rounded.AutoAwesome, "Chapterfy: find chapters by listening") }
-                IconButton(onClick = { editingChapters = true }) { Icon(Icons.Rounded.Edit, "Edit chapters") }
-            }
-        }
-        LazyColumn {
-            if (tab == 0) {
-                files.forEachIndexed { i, file ->
-                    if (files.size > 1) item(key = "f$i") {
-                        Line(file.mediaMetadata.title?.toString().orEmpty(), file.mediaMetadata.durationMs?.let(::formatTime).orEmpty(), current = i == playing && chapters.isEmpty()) { go(i, 0) }
-                    }
-                    if (i == playing) items(chapters, key = { "c$i-${it.startMs}" }) { c ->
-                        Line(c.title, formatTime(c.startMs), current = c == here, indent = files.size > 1) { go(i, c.startMs) }
+        // The chapter editor slides in over the list, and back out on Cancel or Save.
+        AnimatedContent(editingChapters && path != null, transitionSpec = { slideStep(targetState) }, label = "book sheet") { editor ->
+            if (editor && path != null) {
+                ChapterEditor(chapters, state.positionMs, chaptersSaved, onSave = { vm.saveChapters(path, it) }, onReset = { vm.resetChapters(path) }, onClose = { editingChapters = false })
+            } else Column {
+                Row(Modifier.padding(start = 20.dp, end = 20.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    val position by animateFloatAsState(tab.toFloat(), Motion.settle(), label = "book tab")
+                    PillSwitch(listOf("Chapters", "Bookmarks"), position, { tab = it }, Modifier.weight(1f))
+                    // For the file playing: a book of chapter files lists its own chapters under the one playing.
+                    AnimatedVisibility(
+                        tab == 0 && path != null,
+                        enter = expandHorizontally(Motion.settle()) + fadeIn(Motion.settle()),
+                        exit = shrinkHorizontally(Motion.settle()) + fadeOut(Motion.settle()),
+                    ) {
+                        Row(Modifier.padding(start = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            RoundButton("Chapterfy: find chapters by listening", { chapterfyOpen = true }) { Icon(Icons.Rounded.AutoAwesome, null, Modifier.size(20.dp)) }
+                            RoundButton("Edit chapters", { editingChapters = true }) { Icon(Icons.Rounded.Edit, null, Modifier.size(20.dp)) }
+                        }
                     }
                 }
-                if (files.size <= 1 && chapters.isEmpty()) item { Hint("This book has no chapters.") }
-            } else {
-                val mine = bookmarks.filter { it.trackId in indexOf }.sortedWith(compareBy({ indexOf[it.trackId] }, { it.positionMs }))
-                if (mine.isEmpty()) item { Hint("Tap the bookmark in the player to mark a spot.") }
-                items(mine, key = { it.id }) { b ->
-                    val i = indexOf.getValue(b.trackId)
-                    Row(Modifier.fillMaxWidth().clickable { go(i, b.positionMs) }.padding(start = 20.dp, end = 4.dp, top = 4.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Box(Modifier.size(12.dp).background(bookmarkColor(b.color), CircleShape))
-                        Column(Modifier.weight(1f).padding(start = 14.dp)) {
-                            Text(b.caption.ifBlank { "Bookmark" }, style = MaterialTheme.typography.bodyLarge, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                            val where = if (files.size > 1) files[i].mediaMetadata.title?.toString().orEmpty() + " · " else ""
-                            Text(where + formatTime(b.positionMs), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                LazyColumn {
+                    if (tab == 0) {
+                        files.forEachIndexed { i, file ->
+                            if (files.size > 1) item(key = "f$i") {
+                                Line(file.mediaMetadata.title?.toString().orEmpty(), file.mediaMetadata.durationMs?.let(::formatTime).orEmpty(), current = i == playing && chapters.isEmpty()) { go(i, 0) }
+                            }
+                            if (i == playing) items(chapters, key = { "c$i-${it.startMs}" }) { c ->
+                                Line(c.title, formatTime(c.startMs), current = c == here, indent = files.size > 1) { go(i, c.startMs) }
+                            }
                         }
-                        IconButton(onClick = { editing = b }) { Icon(Icons.Rounded.Edit, "Edit bookmark", tint = MaterialTheme.colorScheme.onSurfaceVariant) }
+                        if (files.size <= 1 && chapters.isEmpty()) item { Hint("This book has no chapters.") }
+                    } else {
+                        val mine = bookmarks.filter { it.trackId in indexOf }.sortedWith(compareBy({ indexOf[it.trackId] }, { it.positionMs }))
+                        if (mine.isEmpty()) item { Hint("Tap the bookmark in the player to mark a spot.") }
+                        items(mine, key = { it.id }) { b ->
+                            val i = indexOf.getValue(b.trackId)
+                            Row(Modifier.fillMaxWidth().tap({ go(i, b.positionMs) }).padding(start = 20.dp, end = 4.dp, top = 4.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                                Box(Modifier.size(12.dp).background(bookmarkColor(b.color), CircleShape))
+                                Column(Modifier.weight(1f).padding(start = 14.dp)) {
+                                    Text(b.caption.ifBlank { "Bookmark" }, style = MaterialTheme.typography.bodyLarge, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                                    val where = if (files.size > 1) files[i].mediaMetadata.title?.toString().orEmpty() + " · " else ""
+                                    Text(where + formatTime(b.positionMs), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                }
+                                TapIcon(onClick = { editing = b }) { Icon(Icons.Rounded.Edit, "Edit bookmark", tint = MaterialTheme.colorScheme.onSurfaceVariant) }
+                            }
+                        }
                     }
                 }
             }
@@ -135,12 +150,12 @@ fun BookSheet(state: NowPlayingState, vm: NowPlayingViewModel, onDismiss: () -> 
 @Composable
 private fun Line(title: String, time: String, current: Boolean, indent: Boolean = false, onClick: () -> Unit) =
     Row(
-        Modifier.fillMaxWidth().clickable(onClick = onClick)
-            .background(if (current) MaterialTheme.colorScheme.surfaceVariant else Color.Transparent)
+        Modifier.fillMaxWidth().tap(onClick, to = 0.98f)
+            .background(if (current) Bold.SurfaceHigh else Color.Transparent)
             .padding(start = if (indent) 40.dp else 20.dp, end = 20.dp, top = 12.dp, bottom = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(title, style = MaterialTheme.typography.bodyLarge, fontWeight = if (current) FontWeight.Bold else FontWeight.Normal, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+        Text(title, style = MaterialTheme.typography.bodyLarge, fontWeight = if (current) FontWeight.Bold else FontWeight.Normal, color = if (current) Bold.Mint else Bold.Ink, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
         Text(time, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(start = 12.dp))
     }
 
@@ -153,18 +168,19 @@ private fun Hint(text: String) =
 fun BookmarkDialog(title: String, caption: String, color: Int, onSave: (caption: String, color: Int) -> Unit, onDelete: (() -> Unit)?, onDismiss: () -> Unit) {
     var text by remember { mutableStateOf(caption) }
     var picked by remember { mutableIntStateOf(color) }
-    AlertDialog(
+    BoldDialog(
         onDismissRequest = onDismiss,
         title = { Text(title) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                OutlinedTextField(text, { text = it }, placeholder = { Text("Caption (optional)") }, maxLines = 3)
+                Field("Caption (optional)", text, singleLine = false) { text = it }
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     BookmarkColors.forEachIndexed { i, c ->
+                        val scale by animateFloatAsState(if (i == picked) 1.15f else 1f, Motion.pop(), label = "colour")
                         Box(
-                            Modifier.size(32.dp).background(c, CircleShape)
-                                .then(if (i == picked) Modifier.border(2.dp, MaterialTheme.colorScheme.onSurface, CircleShape) else Modifier)
-                                .clickable { picked = i },
+                            Modifier.size(32.dp).graphicsLayer { scaleX = scale; scaleY = scale }.background(c, CircleShape)
+                                .then(if (i == picked) Modifier.border(2.dp, Bold.Ink, CircleShape) else Modifier)
+                                .tap({ picked = i }),
                             contentAlignment = Alignment.Center,
                         ) { if (i == picked) Icon(Icons.Rounded.Check, contentDescription = "Selected", tint = Color.Black.copy(alpha = 0.7f), modifier = Modifier.size(18.dp)) }
                     }

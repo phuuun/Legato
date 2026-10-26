@@ -8,7 +8,8 @@ import androidx.compose.material.icons.automirrored.rounded.QueueMusic
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
+import com.phuuun.legato.ui.components.Sheet
+import com.phuuun.legato.ui.theme.Bold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -25,11 +26,12 @@ import com.phuuun.legato.library.db.Playlist
 fun AddToPlaylistSheet(playlists: List<Playlist>, onPick: (Playlist) -> Unit, onCreate: (String) -> Unit, onDismiss: () -> Unit) {
     var naming by remember { mutableStateOf(false) }
     if (naming) { NameDialog("New playlist", "", "Create", onDone = onCreate, onDismiss = onDismiss); return }
-    ModalBottomSheet(onDismissRequest = onDismiss, containerColor = MaterialTheme.colorScheme.surface) {
+    // Picking one slides the sheet away before it goes, instead of it vanishing.
+    Sheet(onDismiss) { close ->
         Text("ADD TO PLAYLIST", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(start = 20.dp, bottom = 8.dp))
         LazyColumn(Modifier.padding(bottom = 24.dp)) {
-            item { PlaylistRow("New playlist", Icons.Rounded.Add) { naming = true } }
-            items(playlists, key = { it.id }) { p -> PlaylistRow(p.name, Icons.AutoMirrored.Rounded.QueueMusic) { onPick(p); onDismiss() } }
+            item { PlaylistRow("New playlist", Icons.Rounded.Add, tile = null) { naming = true } }
+            items(playlists, key = { it.id }) { p -> PlaylistRow(p.name, Icons.AutoMirrored.Rounded.QueueMusic, tile = Bold.SurfaceHigh) { onPick(p); close() } }
         }
     }
 }

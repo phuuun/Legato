@@ -19,12 +19,14 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Close
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
+import com.phuuun.legato.ui.components.BoldDialog
+import com.phuuun.legato.ui.components.SmallPill
+import com.phuuun.legato.ui.components.TapIcon
+import com.phuuun.legato.ui.edit.Field
+import com.phuuun.legato.ui.theme.Bold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -56,25 +58,25 @@ fun ChapterEditor(chapters: List<Chapter>, positionMs: Long, canReset: Boolean, 
     val rows = remember { chapters.map { formatTimestamp(it.startMs) to it.title }.toMutableStateList() }
     val parsed = rows.map { (time, title) -> parseTimestamp(time)?.let { Chapter(title.trim(), it) } }
     Column {
-        Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-            TextButton(onClick = onClose) { Text("Cancel") }
+        Row(Modifier.fillMaxWidth().padding(start = 20.dp, end = 20.dp, bottom = 12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            SmallPill("Cancel", onClose)
             Spacer(Modifier.weight(1f))
-            if (canReset) TextButton(onClick = { onReset(); onClose() }) { Text("Reset") }
-            TextButton(enabled = parsed.all { it != null }, onClick = { onSave(parsed.filterNotNull()); onClose() }) { Text("Save") }
+            if (canReset) SmallPill("Reset", { onReset(); onClose() })
+            SmallPill("Save", { onSave(parsed.filterNotNull()); onClose() }, enabled = parsed.all { it != null })
         }
         LazyColumn {
             itemsIndexed(rows) { i, (time, title) ->
-                Row(Modifier.padding(start = 16.dp, end = 4.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedTextField(time, { rows[i] = it to title }, singleLine = true, isError = parseTimestamp(time) == null, modifier = Modifier.width(112.dp))
-                    OutlinedTextField(title, { rows[i] = time to it }, singleLine = true, modifier = Modifier.weight(1f))
-                    IconButton(onClick = { rows.removeAt(i) }) { Icon(Icons.Rounded.Close, "Delete chapter") }
+                Row(Modifier.padding(start = 16.dp, end = 4.dp, bottom = 10.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Field(null, time, Modifier.width(112.dp), isError = parseTimestamp(time) == null) { rows[i] = it to title }
+                    Field(null, title, Modifier.weight(1f)) { rows[i] = time to it }
+                    TapIcon(onClick = { rows.removeAt(i) }) { Icon(Icons.Rounded.Close, "Delete chapter") }
                 }
             }
             item {
-                TextButton(onClick = { rows.add(formatTimestamp(positionMs) to "Chapter ${rows.size + 1}") }, modifier = Modifier.padding(start = 8.dp, bottom = 16.dp)) {
-                    Icon(Icons.Rounded.Add, null)
-                    Text("Add one at ${formatTime(positionMs)}", Modifier.padding(start = 8.dp))
-                }
+                SmallPill(
+                    "Add one at ${formatTime(positionMs)}", { rows.add(formatTimestamp(positionMs) to "Chapter ${rows.size + 1}") },
+                    Modifier.padding(start = 16.dp, top = 4.dp, bottom = 24.dp), icon = Icons.Rounded.Add,
+                )
             }
         }
     }
@@ -105,13 +107,13 @@ fun ChapterfyDialog(vm: NowPlayingViewModel, path: String, onClose: () -> Unit) 
     }
     val muted = MaterialTheme.colorScheme.onSurfaceVariant
     when (val state = s) {
-        Chapterfy.State.Idle -> if (!chapterfy.hasModel) AlertDialog(
+        Chapterfy.State.Idle -> if (!chapterfy.hasModel) BoldDialog(
             onDismissRequest = onClose,
             title = { Text("Chapterfy") },
             text = { Text("Chapterfy listens through the book for the narrator saying \"Chapter …\" and marks each one. It needs an English speech model: a $MODEL_DOWNLOAD_MB MB download, once. Listening happens on this phone; nothing is sent anywhere.") },
             confirmButton = { TextButton(onClick = chapterfy::download) { Text("Download") } },
             dismissButton = { TextButton(onClick = onClose) { Text("Cancel") } },
-        ) else AlertDialog(
+        ) else BoldDialog(
             onDismissRequest = onClose,
             title = { Text("Chapterfy") },
             text = { Text("Listens through this file for the narrator saying \"Chapter …\" and marks each one. It goes on with Legato closed; a notification says when it's done. The chapters it finds replace the list, and Reset in Edit brings the old one back.") },
@@ -123,32 +125,32 @@ fun ChapterfyDialog(vm: NowPlayingViewModel, path: String, onClose: () -> Unit) 
                 }
             },
         )
-        is Chapterfy.State.Downloading -> AlertDialog(
+        is Chapterfy.State.Downloading -> BoldDialog(
             onDismissRequest = onClose,
             title = { Text("Downloading the speech model") },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    LinearProgressIndicator(progress = { state.percent / 100f }, modifier = Modifier.fillMaxWidth())
+                    LinearProgressIndicator(progress = { state.percent / 100f }, modifier = Modifier.fillMaxWidth(), color = Bold.Mint, trackColor = Bold.QuietLine)
                     Text("${state.percent}% of $MODEL_DOWNLOAD_MB MB", color = muted)
                 }
             },
             confirmButton = { TextButton(onClick = chapterfy::cancel) { Text("Cancel") } },
         )
         // A share, not a position: the book is listened to in several stretches at once.
-        is Chapterfy.State.Listening -> AlertDialog(
+        is Chapterfy.State.Listening -> BoldDialog(
             onDismissRequest = onClose,
             title = { Text(if (state.path == path) "Listening…" else "Listening to another book…") },
             text = {
                 val share = if (state.totalMs > 0) state.doneMs.toFloat() / state.totalMs else 0f
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    LinearProgressIndicator(progress = { share }, modifier = Modifier.fillMaxWidth())
+                    LinearProgressIndicator(progress = { share }, modifier = Modifier.fillMaxWidth(), color = Bold.Mint, trackColor = Bold.QuietLine)
                     Text("${(share * 100).toInt()}% · ${state.found} chapters so far", color = muted)
                 }
             },
             confirmButton = { TextButton(onClick = onClose) { Text("Hide") } },
             dismissButton = { TextButton(onClick = chapterfy::cancel) { Text("Stop") } },
         )
-        is Chapterfy.State.Done -> AlertDialog(
+        is Chapterfy.State.Done -> BoldDialog(
             onDismissRequest = onClose,
             title = { Text(if (state.chapters.isEmpty()) "No chapters heard" else "Found ${state.chapters.size} chapters") },
             text = {
@@ -165,7 +167,7 @@ fun ChapterfyDialog(vm: NowPlayingViewModel, path: String, onClose: () -> Unit) 
             confirmButton = { if (state.chapters.isNotEmpty()) TextButton(onClick = { vm.useChapterfy(state); onClose() }) { Text("Use these") } },
             dismissButton = { TextButton(onClick = { chapterfy.dismiss(); onClose() }) { Text(if (state.chapters.isEmpty()) "OK" else "Discard") } },
         )
-        is Chapterfy.State.Failed -> AlertDialog(
+        is Chapterfy.State.Failed -> BoldDialog(
             onDismissRequest = { chapterfy.dismiss(); onClose() },
             title = { Text("Chapterfy stopped") },
             text = { Text(state.message) },

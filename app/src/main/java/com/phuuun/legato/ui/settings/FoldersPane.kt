@@ -4,7 +4,6 @@ import android.provider.DocumentsContract
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -17,7 +16,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
+import com.phuuun.legato.ui.components.SmallPill
+import com.phuuun.legato.ui.components.TapIcon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -51,7 +51,7 @@ fun HiddenFiles(paths: List<String>, onUnhide: (String) -> Unit) {
         paths.sortedBy { it.substringAfterLast('/').lowercase() }.forEach { p ->
             Row(Modifier.fillMaxWidth().padding(start = 16.dp), verticalAlignment = Alignment.CenterVertically) {
                 Text(p.substringAfterLast('/'), style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
-                IconButton(onClick = { onUnhide(p) }) { Icon(Icons.Rounded.Close, contentDescription = "Unhide ${p.substringAfterLast('/')}", tint = MaterialTheme.colorScheme.onSurfaceVariant) }
+                TapIcon(onClick = { onUnhide(p) }) { Icon(Icons.Rounded.Close, contentDescription = "Unhide ${p.substringAfterLast('/')}", tint = MaterialTheme.colorScheme.onSurfaceVariant) }
             }
         }
     }
@@ -68,18 +68,10 @@ fun FoldersPane(folders: Set<String>, hint: String?, onAdd: (String) -> Unit, on
         items(folders.sorted(), key = { it }) { f ->
             Row(Modifier.fillMaxWidth().padding(start = 16.dp), verticalAlignment = Alignment.CenterVertically) {
                 Text(f.trimEnd('/'), style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
-                IconButton(onClick = { onRemove(f) }) { Icon(Icons.Rounded.Close, contentDescription = "Remove ${f.trimEnd('/')}", tint = MaterialTheme.colorScheme.onSurfaceVariant) }
+                TapIcon(onClick = { onRemove(f) }) { Icon(Icons.Rounded.Close, contentDescription = "Remove ${f.trimEnd('/')}", tint = MaterialTheme.colorScheme.onSurfaceVariant) }
             }
         }
-        item {
-            Row(
-                Modifier.fillMaxWidth().clickable { pick() }.padding(horizontal = 16.dp, vertical = 12.dp),
-                verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                Icon(Icons.Rounded.Add, contentDescription = null)
-                Text("Add folder", style = MaterialTheme.typography.bodyLarge)
-            }
-        }
+        item { SmallPill("Add folder", pick, Modifier.padding(horizontal = 16.dp, vertical = 8.dp), icon = Icons.Rounded.Add) }
         if (hint != null) item {
             Text(hint, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
         }

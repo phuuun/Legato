@@ -1,4 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <style name="Theme.Legato" parent="android:Theme.DeviceDefault.NoActionBar" />
+    <!-- Only shows while Legato launches; matches the Compose background (Bold.Paper) so there's no white flash. -->
+    <style name="Theme.Legato" parent="android:Theme.DeviceDefault.NoActionBar">
+        <item name="android:windowBackground">@color/paper</item>
+    </style>
+    <color name="paper">#0B0B0C</color>
 </resources>

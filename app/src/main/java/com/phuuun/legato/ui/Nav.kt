@@ -138,51 +138,65 @@ import androidx.compose.ui.platform.LocalFocusManager
 import com.phuuun.legato.ui.components.LegatoHeader
 import com.phuuun.legato.ui.components.offerUndo
 import com.phuuun.legato.ui.components.screen
-import com.phuuun.legato.ui.library.SearchField
+import com.phuuun.legato.ui.components.SearchField
 import kotlin.math.roundToInt
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.pager.PagerState
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.sp
+import com.phuuun.legato.ui.components.BoldDialog
+import com.phuuun.legato.ui.components.BoldMenu
+import com.phuuun.legato.ui.components.BoldSnackbarHost
+import com.phuuun.legato.ui.components.PillSwitch
+import com.phuuun.legato.ui.components.RoundButton
+import com.phuuun.legato.ui.components.SmallPill
+import com.phuuun.legato.ui.theme.Bold
+import com.phuuun.legato.ui.theme.Motion
 
-private enum class Section(val label: String, val icon: ImageVector) {
-    Music("MUSIC", Icons.Outlined.MusicNote),
-    Audiobooks("AUDIOBOOKS", Icons.Outlined.Headphones),
-    Converter("CONVERTER", Icons.Outlined.Download),
+private enum class Section(val title: String, val icon: ImageVector) {
+    Music("Music", Icons.Outlined.MusicNote),
+    Audiobooks("Audiobooks", Icons.Outlined.Headphones),
+    Converter("Converter", Icons.Outlined.Download),
 }
 
-// Pages open by sliding in from the right and close by sliding back out; the page underneath drifts and fades.
-private const val SLIDE_MS = 280
+// Pages open by sliding in from the right and close by sliding back out; the page underneath drifts and fades. On springs.
 private val enter: AnimatedContentTransitionScope<NavBackStackEntry>.() -> EnterTransition = {
-    slideIntoContainer(AnimatedContentTransitionScope.SlideDirection.Start, tween(SLIDE_MS))
+    slideIntoContainer(AnimatedContentTransitionScope.SlideDirection.Start, Motion.settle())
 }
 private val exit: AnimatedContentTransitionScope<NavBackStackEntry>.() -> ExitTransition = {
-    slideOutOfContainer(AnimatedContentTransitionScope.SlideDirection.Start, tween(SLIDE_MS), targetOffset = { it / 4 }) + fadeOut(tween(SLIDE_MS))
+    slideOutOfContainer(AnimatedContentTransitionScope.SlideDirection.Start, Motion.settle(), targetOffset = { it / 4 }) + fadeOut(Motion.settle())
 }
 private val popEnter: AnimatedContentTransitionScope<NavBackStackEntry>.() -> EnterTransition = {
-    slideIntoContainer(AnimatedContentTransitionScope.SlideDirection.End, tween(SLIDE_MS), initialOffset = { it / 4 }) + fadeIn(tween(SLIDE_MS))
+    slideIntoContainer(AnimatedContentTransitionScope.SlideDirection.End, Motion.settle(), initialOffset = { it / 4 }) + fadeIn(Motion.settle())
 }
 private val popExit: AnimatedContentTransitionScope<NavBackStackEntry>.() -> ExitTransition = {
-    slideOutOfContainer(AnimatedContentTransitionScope.SlideDirection.End, tween(SLIDE_MS))
+    slideOutOfContainer(AnimatedContentTransitionScope.SlideDirection.End, Motion.settle())
 }
 
 /**
  * The Converter tab's icon, so downloads show from any section: a ring with the current file's progress (spinning
- * while it's tagged), a count when more are waiting, and a red dot when something failed and nothing is running.
+ * while it's tagged), a green count when more are waiting, and a red dot when something failed and nothing is running.
  */
 @Composable
-private fun DownloadsIcon(icon: ImageVector, jobs: List<DownloadJob>) {
+private fun DownloadsIcon(icon: ImageVector, jobs: List<DownloadJob>, color: Color) {
     val left = jobs.count { it.state !is JobState.Done && it.state !is JobState.Failed }
     val current = jobs.firstOrNull { it.state is JobState.Downloading || it.state == JobState.Tagging }?.state
-    val percent by animateFloatAsState((current as? JobState.Downloading)?.percent?.div(100f) ?: 0f, label = "download")
+    val percent by animateFloatAsState((current as? JobState.Downloading)?.percent?.div(100f) ?: 0f, Motion.settle(), label = "download")
     BadgedBox(badge = {
         when {
-            left > 1 -> Badge(containerColor = MaterialTheme.colorScheme.onBackground, contentColor = MaterialTheme.colorScheme.background) { Text("$left") }
-            left == 0 && jobs.any { it.state is JobState.Failed } -> Badge()
+            left > 1 -> Badge(containerColor = Bold.Mint, contentColor = Bold.DarkInk) { Text("$left", fontWeight = FontWeight.ExtraBold) }
+            left == 0 && jobs.any { it.state is JobState.Failed } -> Badge(containerColor = Bold.Error)
         }
     }) {
         Box(contentAlignment = Alignment.Center) {
-            Icon(icon, contentDescription = null)
-            val ring = Modifier.requiredSize(34.dp)
+            Icon(icon, contentDescription = null, Modifier.size(18.dp), tint = color)
+            val ring = Modifier.requiredSize(28.dp)
             when (current) {
-                is JobState.Downloading -> CircularProgressIndicator(progress = { percent }, ring, strokeWidth = 2.dp, color = MaterialTheme.colorScheme.onBackground)
-                JobState.Tagging -> CircularProgressIndicator(ring, strokeWidth = 2.dp, color = MaterialTheme.colorScheme.onBackground)
+                is JobState.Downloading -> CircularProgressIndicator(progress = { percent }, ring, strokeWidth = 2.dp, color = color, trackColor = Color.Transparent)
+                JobState.Tagging -> CircularProgressIndicator(ring, strokeWidth = 2.dp, color = color)
                 else -> Unit
             }
         }
@@ -193,9 +207,9 @@ private fun DownloadsIcon(icon: ImageVector, jobs: List<DownloadJob>) {
 @Composable
 private fun SortButton(sort: Sort, books: Boolean, onPick: (Sort) -> Unit) {
     var open by remember { mutableStateOf(false) }
-    Box(Modifier.padding(end = 8.dp)) {
-        IconButton(onClick = { open = true }) { Icon(Icons.AutoMirrored.Rounded.Sort, contentDescription = "Sort") }
-        DropdownMenu(open, { open = false }) {
+    Box(Modifier.padding(start = 12.dp)) {
+        RoundButton("Sort", onClick = { open = true }) { Icon(Icons.AutoMirrored.Rounded.Sort, contentDescription = null, Modifier.size(20.dp)) }
+        BoldMenu(open, { open = false }) {
             listOf(Sort.Title to "Title A–Z", Sort.Artist to if (books) "Author A–Z" else "Artist A–Z", Sort.Recent to "Recently added", Sort.Plays to "Most played", Sort.Played to "Recently played").forEach { (s, label) ->
                 DropdownMenuItem(
                     text = { Text(label) }, onClick = { onPick(s); open = false },
@@ -205,6 +219,25 @@ private fun SortButton(sort: Sort, books: Boolean, onPick: (Sort) -> Unit) {
         }
     }
 }
+
+/** The page, fractional mid-swipe. Read it only in small composables (or layout): it changes every frame of a swipe. */
+private fun PagerState.position() = (currentPage + currentPageOffsetFraction).coerceIn(0f, Section.entries.lastIndex.toFloat())
+
+@Composable
+private fun SectionHeader(pager: PagerState, counts: List<Int?>, onSettings: () -> Unit) =
+    LegatoHeader(Section.entries.map { it.title }, counts, pager.position(), onSettings)
+
+/** The sections as chips with an Ink fill that follows the pager, mid-swipe too. */
+@Composable
+private fun SectionBar(pager: PagerState, jobs: List<DownloadJob>, onSelect: (Section) -> Unit) =
+    PillSwitch(
+        Section.entries.size, pager.position(), onSelect = { onSelect(Section.entries[it]) },
+        modifier = Modifier.navigationBarsPadding().padding(start = 12.dp, end = 12.dp, top = 4.dp, bottom = 10.dp).fillMaxWidth(),
+    ) { i, color ->
+        val s = Section.entries[i]
+        if (s == Section.Converter) DownloadsIcon(s.icon, jobs, color) else Icon(s.icon, contentDescription = null, Modifier.size(18.dp), tint = color)
+        Text(s.title, fontSize = 13.sp, fontWeight = FontWeight.Bold, color = color, maxLines = 1, modifier = Modifier.padding(start = 6.dp))
+    }
 
 @Composable
 private fun SlidingNavHost(nav: NavHostController, start: String, modifier: Modifier = Modifier, builder: NavGraphBuilder.() -> Unit) =
@@ -308,10 +341,12 @@ fun LegatoNav(library: LibraryRepository, audiobooks: LibraryRepository, player:
             SlidingNavHost(root, "main", Modifier.fillMaxSize().consumeWindowInsets(WindowInsets.navigationBars)) {
                 composable("main") {
                     Column(Modifier.screen()) {
-                        // The name, settings and search stay put while the pages slide under them. Search only means
-                        // something for Music and Audiobooks, so it folds away as Converter slides in, in step with the finger.
-                        LegatoHeader(onSettings)
-                        val toConverter by remember { derivedStateOf { (pager.currentPage + pager.currentPageOffsetFraction - Section.Audiobooks.ordinal).coerceIn(0f, 1f) } }
+                        // The name, settings and search stay put while the pages slide under them; the big title follows
+                        // the finger. Search only means something for Music and Audiobooks, so it folds away as Converter
+                        // slides in, in step with the finger.
+                        val waiting = jobs.count { it.state !is JobState.Done && it.state !is JobState.Failed }
+                        SectionHeader(pager, listOf(state.tracks.size.takeIf { state.loaded }, bookList?.size, waiting.takeIf { it > 0 }), onSettings)
+                        val toConverter by remember { derivedStateOf { (pager.position() - Section.Audiobooks.ordinal).coerceIn(0f, 1f) } }
                         val focus = LocalFocusManager.current
                         LaunchedEffect(pager.settledPage) { if (pager.settledPage == Section.Converter.ordinal) focus.clearFocus() }
                         Row(
@@ -320,7 +355,7 @@ fun LegatoNav(library: LibraryRepository, audiobooks: LibraryRepository, player:
                                 layout(p.width, (p.height * (1 - toConverter)).roundToInt()) {
                                     p.placeRelativeWithLayer(-(p.width * toConverter).roundToInt(), 0) { alpha = 1 - toConverter }
                                 }
-                            },
+                            }.padding(start = 20.dp, end = 20.dp, top = 14.dp, bottom = 6.dp),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
                             SearchField(
@@ -335,6 +370,7 @@ fun LegatoNav(library: LibraryRepository, audiobooks: LibraryRepository, player:
                             )
                             SortButton(sort, books = pager.currentPage == Section.Audiobooks.ordinal, folders::setSort)
                         }
+                        Spacer(Modifier.height(8.dp))
                         HorizontalPager(pager, Modifier.fillMaxSize()) { page ->
                             when (Section.entries[page]) {
                                 Section.Music -> SlidingNavHost(musicNav, "library") {
@@ -442,9 +478,9 @@ fun LegatoNav(library: LibraryRepository, audiobooks: LibraryRepository, player:
                                 val f by remember { folders.folders(FolderKind.Music) }.collectAsState(emptySet())
                                 val hidden by remember { folders.hidden }.collectAsState(emptySet())
                                 FoldersPane(f, "Only files directly in these folders show up. With no folders, all music shows.", { folders.add(FolderKind.Music, it) }, { folders.remove(FolderKind.Music, it) }) {
-                                    Text(
-                                        "Fix unknown artists (${state.tracks.count { it.artists.isEmpty() }})", style = MaterialTheme.typography.bodyLarge,
-                                        modifier = Modifier.fillMaxWidth().clickable { root.navigate("fix") }.padding(horizontal = 16.dp, vertical = 12.dp),
+                                    SmallPill(
+                                        "Fix unknown artists (${state.tracks.count { it.artists.isEmpty() }})", { root.navigate("fix") },
+                                        Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
                                     )
                                     // Anything not in an audiobook folder counts as music here.
                                     HiddenFiles(hidden.filterNot { inFolders(it, audiobookFolders.orEmpty()) }) { folders.unhide(listOf(it)) }
@@ -464,42 +500,30 @@ fun LegatoNav(library: LibraryRepository, audiobooks: LibraryRepository, player:
                     }
                 }
             }
-            SnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter))
+            BoldSnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter))
         }
         // The mini player slides up when something starts and away when the queue empties; it shows the last
         // track while it leaves, so it doesn't blank out mid-animation.
         var shown by remember { mutableStateOf(now) }
         LaunchedEffect(now) { if (now != null) shown = now }
-        AnimatedVisibility(now != null, enter = expandVertically(expandFrom = Alignment.Top) + fadeIn(), exit = shrinkVertically(shrinkTowards = Alignment.Top) + fadeOut()) {
+        AnimatedVisibility(
+            now != null,
+            enter = expandVertically(Motion.settle(), expandFrom = Alignment.Top) + fadeIn(Motion.settle()),
+            exit = shrinkVertically(Motion.settle(), shrinkTowards = Alignment.Top) + fadeOut(Motion.settle()),
+        ) {
             (now ?: shown)?.let { MiniPlayer(it, nowPlayingVm::togglePlay, nowPlayingVm::skip, onOpen = { expanded = true }) }
         }
-        HorizontalDivider(thickness = 0.5.dp, color = MaterialTheme.colorScheme.outline)
-        NavigationBar(containerColor = MaterialTheme.colorScheme.background, tonalElevation = 0.dp) {
-            Section.entries.forEach { s ->
-                val selected = pager.currentPage == s.ordinal
-                NavigationBarItem(
-                    selected = selected,
-                    onClick = {
-                        // Tapping the open section again goes back to its first page.
-                        if (selected && root.currentDestination?.route == "main") when (s) {
-                            Section.Music -> musicNav.popBackStack("library", inclusive = false)
-                            Section.Audiobooks -> bookNav.popBackStack("books", inclusive = false)
-                            Section.Converter -> Unit
-                        } else toSection(s)
-                    },
-                    icon = { if (s == Section.Converter) DownloadsIcon(s.icon, jobs) else Icon(s.icon, contentDescription = null) },
-                    label = { Text(s.label, style = MaterialTheme.typography.labelSmall) },
-                    colors = NavigationBarItemDefaults.colors(
-                        selectedIconColor = MaterialTheme.colorScheme.onBackground, selectedTextColor = MaterialTheme.colorScheme.onBackground,
-                        unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant, unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                        indicatorColor = Color.Transparent,
-                    ),
-                )
-            }
+        SectionBar(pager, jobs) { s ->
+            // Tapping the open section again goes back to its first page.
+            if (pager.currentPage == s.ordinal && root.currentDestination?.route == "main") when (s) {
+                Section.Music -> musicNav.popBackStack("library", inclusive = false)
+                Section.Audiobooks -> bookNav.popBackStack("books", inclusive = false)
+                Section.Converter -> Unit
+            } else toSection(s)
         }
     }
     now?.let { if (expanded) NowPlayingSheet(it, nowPlayingVm, onDismiss = { expanded = false }, onEdit = { id -> root.navigate("edit/$id") }) }
-    if (offerRestore) AlertDialog(
+    if (offerRestore) BoldDialog(
         onDismissRequest = { offerRestore = false; backups.decline() },
         title = { Text("Restore your backup?") },
         text = { Text("There's a Legato backup from ${DateUtils.getRelativeTimeSpanString(backups.file?.lastModified() ?: 0)} in Downloads: playlists, bookmarks, listening progress and folders.") },

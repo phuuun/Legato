@@ -2,7 +2,7 @@ package com.phuuun.legato.ui.components
 
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.snap
-import androidx.compose.animation.core.spring
+import com.phuuun.legato.ui.theme.Motion
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.runtime.getValue
@@ -29,7 +29,7 @@ fun Modifier.swipeToSkip(onSkip: (forward: Boolean) -> Unit, onUp: (() -> Unit)?
     val up by rememberUpdatedState(onUp)
     var drag by remember { mutableStateOf(Offset.Zero) }
     var held by remember { mutableStateOf(false) }
-    val x by animateFloatAsState(drag.x, if (held) snap() else spring(), label = "swipe")
+    val x by animateFloatAsState(drag.x, if (held) snap() else Motion.pop(), label = "swipe")
     val start = { _: Offset -> held = true }
     val end = {
         when {
