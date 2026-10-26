@@ -12,8 +12,8 @@ android {
         applicationId = "com.phuuun.legato"
         minSdk = 30
         targetSdk = 37
-        versionCode = 5
-        versionName = "1.0.4"
+        versionCode = 6
+        versionName = "1.0.5"
         // TagLib is native; this phone is 64-bit ARM, and every other ABI is dead weight in the APK.
         ndk { abiFilters += "arm64-v8a" }
         // Optimized in debug builds too: unoptimized, Whisper is several times slower and trying Chapterfy says nothing.
