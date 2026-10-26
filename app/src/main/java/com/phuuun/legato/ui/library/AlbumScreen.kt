@@ -42,6 +42,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.layout
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.phuuun.legato.ui.components.screen
 import com.phuuun.legato.library.Album
@@ -120,14 +122,25 @@ fun ArtistScreen(artist: Artist?, onBack: () -> Unit, onAlbum: (Long) -> Unit, o
             GridCells.Fixed(2), Modifier.fillMaxSize(), contentPadding = PaddingValues(20.dp),
             horizontalArrangement = Arrangement.spacedBy(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            // Section titles only when there's an Appears on: an artist with just their own albums keeps a plain grid.
-            val titled = artist.appearsOn.isNotEmpty()
+            // Section titles only when there's more than their own albums: an artist with just those keeps a plain grid.
+            val titled = artist.appearsOn.isNotEmpty() || artist.songs.isNotEmpty()
             if (titled && artist.albums.isNotEmpty()) item(span = { GridItemSpan(maxLineSpan) }) { Section("ALBUMS") }
             items(artist.albums, key = { it.id }) { a -> AlbumCard(a, onClick = { onAlbum(a.id) }, actions = actions) }
-            if (titled) item(span = { GridItemSpan(maxLineSpan) }) { Section("APPEARS ON") }
+            if (artist.appearsOn.isNotEmpty()) item(span = { GridItemSpan(maxLineSpan) }) { Section("APPEARS ON") }
             items(artist.appearsOn, key = { "on" + it.id }) { a -> AlbumCard(a, onClick = { onAlbum(a.id) }, actions = actions) }
+            if (artist.songs.isNotEmpty()) item(span = { GridItemSpan(maxLineSpan) }) { Section("SONGS") }
+            items(artist.songs, key = { "s" + it.id }, span = { GridItemSpan(maxLineSpan) }) { t ->
+                SongRow(t, onClick = { onPlay(artist.songs, artist.songs.indexOf(t)) }, actions = actions, modifier = Modifier.bleed(20.dp))
+            }
         }
     }
+}
+
+/** Out past the grid's padding on both sides, so a song row lines up as on every other screen. */
+private fun Modifier.bleed(by: Dp) = layout { m, c ->
+    val extra = (by * 2).roundToPx()
+    val p = m.measure(c.copy(minWidth = c.minWidth + extra, maxWidth = c.maxWidth + extra))
+    layout(p.width - extra, p.height) { p.place(-extra / 2, 0) }
 }
 
 @Composable

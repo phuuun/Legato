@@ -3,6 +3,7 @@ package com.phuuun.legato.ui.library
 import com.phuuun.legato.library.Album
 import com.phuuun.legato.library.Artist
 import com.phuuun.legato.library.Track
+import com.phuuun.legato.library.albumTag
 import com.phuuun.legato.library.groupAlbums
 import com.phuuun.legato.library.groupArtists
 
@@ -19,6 +20,6 @@ fun search(query: String, tracks: List<Track>): SearchResults {
     return SearchResults(
         tracks = tracks.filter { it.title.hit() || it.artist.hit() || it.album.hit() },
         albums = albums,
-        artists = groupArtists(groupAlbums(tracks)).filter { it.name.hit() },
+        artists = groupArtists(groupAlbums(tracks), tracks.filter { it.albumTag.isEmpty() }).filter { it.name.hit() },
     )
 }

@@ -33,10 +33,10 @@ val Track.albumTag: String
 /** [artists]: who the album is by (see mainArtists); [artist] shows them, "Unknown artist" when there are none. */
 data class Album(val id: Long, val title: String, val artist: String, val artUri: Uri?, val tracks: List<Track>, val artists: List<String> = emptyList())
 
-/** Like Spotify: [albums] are the artist's own, [appearsOn] are other artists' albums with them on a song. */
-data class Artist(val name: String, val albums: List<Album>, val appearsOn: List<Album> = emptyList()) {
-    /** Everything they're on: their albums whole, and their songs on the rest. */
-    val tracks: List<Track> get() = albums.flatMap { it.tracks } + appearsOn.flatMap { a -> a.tracks.filter { name in it.artists } }
+/** Like Spotify: [albums] are the artist's own, [appearsOn] are other artists' albums with them on a song, [songs] are on no album. */
+data class Artist(val name: String, val albums: List<Album>, val appearsOn: List<Album> = emptyList(), val songs: List<Track> = emptyList()) {
+    /** Everything they're on: their albums whole, their songs on the rest, and their songs on no album. */
+    val tracks: List<Track> get() = albums.flatMap { it.tracks } + appearsOn.flatMap { a -> a.tracks.filter { name in it.artists } } + songs
 }
 
 // ponytail: a comma always splits, so "Tyler, The Creator" becomes two artists; keep a list of comma names if one turns up.
@@ -78,7 +78,7 @@ fun trackFromRow(
         id = id,
         title = (edit["TITLE"] ?: title)?.takeIf { it.isNotBlank() } ?: displayName.substringBeforeLast('.'),
         artist = artists.joinToString(", ").ifEmpty { "Unknown artist" },
-        album = (editedAlbum ?: album)?.takeIf { it.isNotBlank() } ?: "Unknown album",
+        album = (editedAlbum ?: albumTag).ifBlank { "Unknown album" },
         albumId = editedAlbumId ?: albumId,
         durationMs = durationMs,
         uri = uri,

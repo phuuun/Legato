@@ -2,9 +2,12 @@ package com.phuuun.legato.library
 
 import com.phuuun.legato.library.db.PlayStat
 
-/** Grouped by MediaStore album id, not name: two "Greatest Hits" by different artists stay separate. */
+/**
+ * Grouped by MediaStore album id, not name: two "Greatest Hits" by different artists stay separate.
+ * A song with no album tag makes no album (MediaStore would group it under its folder's name); see groupArtists.
+ */
 fun groupAlbums(tracks: List<Track>): List<Album> =
-    tracks.groupBy { it.albumId }.map { (id, group) ->
+    tracks.filter { it.albumTag.isNotEmpty() }.groupBy { it.albumId }.map { (id, group) ->
         val ordered = group.sortedBy { it.trackNumber } // stable: tracks with no number keep their input order
         val by = mainArtists(ordered)
         Album(id, ordered.first().album, by.joinToString(", ").ifEmpty { "Unknown artist" }, ordered.first().artUri, ordered, by)
@@ -43,9 +46,15 @@ fun List<Album>.sortedFor(sort: Sort, stats: Map<Long, PlayStat> = emptyMap()): 
     Sort.Plays, Sort.Played -> byPlays({ it.title }) { stats.score(it.tracks, sort) }
 }
 
-/** An album sits under its main artists' Albums, and under Appears on for everyone else on one of its songs. */
-fun groupArtists(albums: List<Album>): List<Artist> {
+/**
+ * An album sits under its main artists' Albums, and under Appears on for everyone else on one of its songs.
+ * [songs] (no album tag) sit under Songs for each of their artists.
+ */
+fun groupArtists(albums: List<Album>, songs: List<Track> = emptyList()): List<Artist> {
     val own = albums.flatMap { a -> a.artists.ifEmpty { listOf("Unknown artist") }.map { it to a } }.groupBy({ it.first }, { it.second })
     val guest = albums.flatMap { a -> a.tracks.flatMap { it.artists }.distinct().filter { it !in a.artists }.map { it to a } }.groupBy({ it.first }, { it.second })
-    return (own.keys + guest.keys).map { Artist(it, own[it].orEmpty(), guest[it].orEmpty()) }.sortedBy { it.name.lowercase() }
+    val loose = songs.flatMap { t -> t.artists.ifEmpty { listOf("Unknown artist") }.map { it to t } }.groupBy({ it.first }, { it.second })
+    return (own.keys + guest.keys + loose.keys)
+        .map { Artist(it, own[it].orEmpty(), guest[it].orEmpty(), loose[it].orEmpty().sortedBy { t -> t.title.lowercase() }) }
+        .sortedBy { it.name.lowercase() }
 }

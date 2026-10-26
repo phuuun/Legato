@@ -112,6 +112,19 @@ class GroupingTest {
     }
 
     @Test
+    fun an_untagged_song_makes_no_album_but_stays_with_its_artist() {
+        // MediaStore names an untagged file's album after its folder.
+        val loose = trackFromRow(1, "Song", "Bee", "Music", 5, 1000, "s.mp3", relativePath = "Music/")
+        val tagged = row(2, "X", 1, "Bee")
+        assertEquals("Unknown album", loose.album)
+        val albums = groupAlbums(listOf(loose, tagged))
+        assertEquals(listOf("X"), albums.map { it.title })
+        val bee = groupArtists(albums, listOf(loose)).single()
+        assertEquals(listOf(1L), bee.songs.map { it.id })
+        assertEquals(listOf(2L, 1L), bee.tracks.map { it.id })
+    }
+
+    @Test
     fun unknown_artist_keeps_its_own_entry() {
         val artists = groupArtists(groupAlbums(listOf(row(1, "X", 1, artist = null))))
         assertEquals(listOf("Unknown artist"), artists.map { it.name })

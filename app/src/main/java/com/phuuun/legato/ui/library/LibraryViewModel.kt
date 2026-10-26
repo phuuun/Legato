@@ -10,6 +10,7 @@ import com.phuuun.legato.library.db.PlayStat
 import com.phuuun.legato.library.sortedFor
 import kotlinx.coroutines.flow.Flow
 import com.phuuun.legato.library.Track
+import com.phuuun.legato.library.albumTag
 import com.phuuun.legato.library.groupAlbums
 import com.phuuun.legato.library.groupArtists
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -33,7 +34,7 @@ class LibraryViewModel(repo: LibraryRepository, sort: Flow<Sort>, stats: Flow<Ma
 
     val state: StateFlow<LibraryState> = combine(repo.tracks, query, sort, stats) { tracks, q, s, st ->
         val albums = groupAlbums(tracks)
-        LibraryState(true, tracks.sortedFor(s, st), albums.sortedFor(s, st), groupArtists(albums), q, search(q, tracks))
+        LibraryState(true, tracks.sortedFor(s, st), albums.sortedFor(s, st), groupArtists(albums, tracks.filter { it.albumTag.isEmpty() }), q, search(q, tracks))
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), LibraryState())
 
     fun setQuery(q: String) { query.value = q }
